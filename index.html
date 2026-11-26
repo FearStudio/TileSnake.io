@@ -36,7 +36,7 @@ button.alt{background:transparent;color:var(--acc);border:1px solid var(--acc);f
 <script>
 // ====== CONFIG ======
 const QS=new URLSearchParams(location.search);
-const WS_URL=QS.get('ws')||(['localhost','127.0.0.1',''].includes(location.hostname)?'ws://localhost:8080':'wss://YOUR-SERVER.onrender.com');
+const WS_URL=QS.get('ws')||(['localhost','127.0.0.1',''].includes(location.hostname)?'ws://localhost:8080':'wss://tilesnake-io.onrender.com');
 // ====== CRAZYGAMES SDK ======
 const CG=window.CrazyGames&&window.CrazyGames.SDK;
 const gp=s=>{try{CG&&CG.game[s?'gameplayStart':'gameplayStop']()}catch(e){}};
@@ -83,17 +83,13 @@ function onMsg(m){
     $('go').textContent='PLAY AGAIN';
   }else if(m.t==='full')menu(true,'Room full — try again');
 }
-function vt(p){return[p.px+(p.x-p.px)*p.t,p.py+(p.y-p.py)*p.t]}
+function vt(p){return[p.vx,p.vy]}
 function snap(m){
   for(let k=0;k<m.d.length;k+=3){own[m.d[k]]=m.d[k+1];trl[m.d[k]]=m.d[k+2]}
   for(const e of m.e){
     let p=P[e.i];
-    if(!p){p=P[e.i]={x:e.x,y:e.y,px:e.x,py:e.y,t:1,a:0}}
-    if(p.x!==e.x||p.y!==e.y){
-      if(Math.abs(e.x-p.x)+Math.abs(e.y-p.y)>3||(!p.a&&e.a)){p.px=e.x;p.py=e.y}
-      else{const v=vt(p);p.px=v[0];p.py=v[1]}
-      p.t=0;
-    }
+    if(!p){p=P[e.i]={x:e.x,y:e.y,vx:e.x,vy:e.y,a:0}}
+    if(Math.abs(e.x-p.vx)+Math.abs(e.y-p.vy)>4||(!p.a&&e.a)){p.vx=e.x;p.vy=e.y}
     Object.assign(p,{id:e.i,x:e.x,y:e.y,dx:e.dx,dy:e.dy,a:e.a,b:e.b,s:e.s,f:e.f,k:e.k,r:e.r,n:e.n,h:e.h,c:COLORS[e.i-1]});
   }
   pu=m.pu;towers=m.tw;
@@ -119,9 +115,10 @@ $('inv').onclick=()=>{try{navigator.clipboard.writeText(inviteLink());$('inv').t
 // ====== RENDER ======
 function draw(dt){
   time+=dt;
-  for(const id in P){const p=P[id];p.t=Math.min(1,p.t+dt*(p.b?1.6:1)*(p.h?1:.9)/STEP)}
+  const k=1-Math.exp(-dt/.08),kc=1-Math.exp(-dt*14);
+  for(const id in P){const p=P[id],L=p.a?.6:0;p.vx+=(p.x+p.dx*L-p.vx)*k;p.vy+=(p.y+p.dy*L-p.vy)*k}
   const mp=P[me];
-  if(mp){const v=vt(mp);camx+=((v[0]+.5)*T-camx)*.15;camy+=((v[1]+.5)*T-camy)*.15}
+  if(mp){const v=vt(mp);camx+=((v[0]+.5)*T-camx)*kc;camy+=((v[1]+.5)*T-camy)*kc}
   g.fillStyle='#05060c';g.fillRect(0,0,W,H);
   g.save();g.translate(Math.round(W/2-camx),Math.round(H/2-camy));
   g.fillStyle='#0b0e1c';g.fillRect(0,0,N*T,N*T);
