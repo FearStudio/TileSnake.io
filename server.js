@@ -231,7 +231,10 @@ function Game(code, onEmpty) {
       send(ws, { t: 'init', id: e.id, room: code, own: Buffer.from(own.buffer, own.byteOffset, own.length).toString('base64'), trl: Buffer.from(trl.buffer, trl.byteOffset, trl.length).toString('base64') });
       start(); return true;
     },
-    play(e, name) { if (e.alive) return; e.name = clean(name); e.kills = 0; spawn(e); },
+    play(e, name) {
+      if (!e.alive) { e.name = clean(name); e.kills = 0; spawn(e); }
+      send(e.ws, { t: 'init', id: e.id, room: code, own: Buffer.from(own.buffer, own.byteOffset, own.length).toString('base64'), trl: Buffer.from(trl.buffer, trl.byteOffset, trl.length).toString('base64') });
+    },
     dir(e, d) { if (e.alive && d >= 0 && d < 4) e.q = d | 0; },
     leave(ws) {
       const e = ws.ent; if (!e) return;
