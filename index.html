@@ -28,7 +28,7 @@ button.alt{background:transparent;color:var(--acc);border:1px solid var(--acc);f
 <div id="menu"><div id="card">
 <h1>TILE RUSH</h1><div class="sub">BY FEAR STUDIO</div>
 <div id="res"></div>
-<input id="nm" maxlength="12" placeholder="Your name" value="Fear Legion">
+<input id="nm" maxlength="12" placeholder="Enter your name" autocomplete="off">
 <button id="go">PLAY</button>
 <button id="inv" class="alt" style="display:none">COPY INVITE LINK</button>
 <div class="help">Arrows / WASD or swipe to move.<br>Leave your zone, loop back to claim land.<br>Cross a trail to cut it — the cut races to the owner’s head. Hit your own trail and it cuts you too.<br><b style="color:#ffd400">»</b> speed &nbsp; <b style="color:#00f0ff">◈</b> shield &nbsp; Towers: surround one with your colour to claim it and flood a radius. Kills give Overdrive.</div>
@@ -189,7 +189,6 @@ function loop(n){const dt=Math.min(.05,(n-last)/1000);last=n;draw(dt);requestAni
 // ====== BOOT ======
 (async()=>{
   try{if(CG){await CG.init();CG.game.loadingStart&&CG.game.loadingStart()}}catch(e){}
-  try{if(CG&&CG.user&&CG.user.getUser){const u=await CG.user.getUser();if(u&&u.username)$('nm').value=u.username.slice(0,12)}}catch(e){}
   requestAnimationFrame(loop);
   try{CG&&CG.game.loadingStop&&CG.game.loadingStop()}catch(e){}
   try{if(CG&&CG.game.isInstantMultiplayer)play()}catch(e){}
