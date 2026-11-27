@@ -60,7 +60,7 @@ COPY INVITE LINK
 
 <div class="help">
 Arrows / WASD or swipe to move.<br>
-Press the opposite way to stop. Then go any way except back onto your trail.<br>
+Stop anytime: press the opposite way, press Space, or tap. Then go any way except back onto your trail.<br>
 Leave your zone, loop back to claim land.<br>
 Cross a trail to cut it — the cut races to the owner’s head. Hit your own trail and it cuts you too.<br>
 <b style="color:#ffd400">»</b> speed &nbsp;
@@ -665,14 +665,28 @@ addEventListener('keydown',e => {
     e.preventDefault();
   }
 
+  if (e.code === 'Space') {
+    tx({t:'stop'});
+    e.preventDefault();
+  }
+
 });
 
 let sx = 0;
 let sy = 0;
+let swiped = false;
 
 addEventListener('touchstart',e => {
   sx = e.touches[0].clientX;
   sy = e.touches[0].clientY;
+  swiped = false;
+},{passive:true});
+
+// a quick tap (no swipe) while playing = stop / go
+addEventListener('touchend',e => {
+  if (!swiped && $('menu').style.display === 'none') {
+    tx({t:'stop'});
+  }
 },{passive:true});
 
 addEventListener('touchmove',e => {
@@ -693,6 +707,7 @@ addEventListener('touchmove',e => {
 
     sx = t.clientX;
     sy = t.clientY;
+    swiped = true;
   }
 
 },{passive:true});

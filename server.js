@@ -915,14 +915,42 @@ function Game(code, onEmpty) {
         return;
       }
 
-      // moving: pressing the opposite direction stops you in place
-      if (nd[0] === -e.dx && nd[1] === -e.dy) {
+      // moving: pressing the opposite of where you're heading stops you in place
+      // (counts a turn you've just queued as your heading, so it works right after turning too)
+      const hd = e.q !== null ? D[e.q] : [e.dx, e.dy];
+
+      if (nd[0] === -hd[0] && nd[1] === -hd[1]) {
+        if (e.q !== null) {
+          e.dx = hd[0];
+          e.dy = hd[1];
+          e.q = null;
+        }
+
         e.stopped = true;
-        e.q = null;
         return;
       }
 
       e.q = d;
+    },
+
+
+    // stop / go toggle (space bar or tap): works in any direction
+    stop(e) {
+      if (!e.alive) return;
+
+      if (e.stopped) {
+        e.stopped = false;
+        e.acc = STEP;
+        return;
+      }
+
+      if (e.q !== null) {
+        e.dx = D[e.q][0];
+        e.dy = D[e.q][1];
+        e.q = null;
+      }
+
+      e.stopped = true;
     },
 
 
@@ -1022,6 +1050,8 @@ wss.on('connection', ws => {
 
     } else if (m.t === 'dir' && ws.game && ws.ent) {
       ws.game.dir(ws.ent, m.d);
+    } else if (m.t === 'stop' && ws.game && ws.ent) {
+      ws.game.stop(ws.ent);
     }
   });
 
