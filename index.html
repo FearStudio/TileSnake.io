@@ -18,6 +18,22 @@ canvas{position:fixed;inset:0;width:100%;height:100%;touch-action:none}
 #lb .me{color:var(--acc);font-weight:700}
 #feed{position:fixed;left:10px;top:calc(env(safe-area-inset-top,0px) + 82px);font-size:12px;pointer-events:none}
 #feed div{background:var(--panel);margin-bottom:4px;padding:3px 8px;border-radius:8px;width:max-content}
+#st,#lb,#feed{--hud-scale:1}
+#st{transform:scale(var(--hud-scale));transform-origin:top left}
+#lb{transform:scale(var(--hud-scale));transform-origin:top right}
+#feed{transform:scale(var(--hud-scale));transform-origin:top left}
+#settingsTab{position:fixed;right:12px;bottom:12px;z-index:20;width:auto;padding:8px 12px;font-size:12px;letter-spacing:1px;pointer-events:auto}
+#settings{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(5,6,12,.72);z-index:30}
+#settingsCard{background:var(--panel);border:1px solid var(--acc);border-radius:18px;padding:22px 24px;width:min(360px,calc(100% - 48px));box-sizing:border-box;box-shadow:0 0 40px rgba(0,240,255,.25)}
+#settingsCard h2{margin:0 0 16px;font-size:24px;letter-spacing:2px}
+.setting{margin:14px 0}
+.settingRow{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.setting label{font-size:13px}
+.setting input[type=range]{width:100%;accent-color:var(--acc)}
+.settingValue{min-width:48px;text-align:right;color:var(--acc);font-weight:700}
+.toggle{display:flex;align-items:center;justify-content:space-between;padding:8px 0}
+.toggle input{width:18px;height:18px;margin:0;accent-color:var(--acc)}
+#settingsCard .closeSettings{margin-top:10px}
 #menu{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(5,6,12,.72)}
 #card{background:var(--panel);border:1px solid var(--acc);border-radius:18px;padding:28px 32px;text-align:center;box-shadow:0 0 40px rgba(0,240,255,.25);max-width:340px;width:calc(100% - 64px)}
 h1{margin:0;font-size:38px;letter-spacing:3px;background:linear-gradient(90deg,var(--acc),var(--acc2));-webkit-background-clip:text;background-clip:text;color:transparent}
@@ -41,6 +57,42 @@ Kills <span id="kl">0</span> · Best <span id="bst">0%</span>
 
 <div class="hud" id="lb"></div>
 <div id="feed"></div>
+
+<button id="settingsTab" class="alt">SETTINGS [P]</button>
+
+<div id="settings">
+  <div id="settingsCard">
+    <h2>SETTINGS</h2>
+
+    <div class="setting">
+      <div class="settingRow">
+        <label for="uiSize">UI size</label>
+        <span class="settingValue" id="uiSizeValue">100%</span>
+      </div>
+      <input id="uiSize" type="range" min="75" max="140" step="5" value="100">
+    </div>
+
+    <div class="setting">
+      <div class="settingRow">
+        <label for="miniMapSize">Mini map size</label>
+        <span class="settingValue" id="miniMapSizeValue">100%</span>
+      </div>
+      <input id="miniMapSize" type="range" min="70" max="140" step="5" value="100">
+    </div>
+
+    <div class="toggle">
+      <label for="showFeed">Kill feed</label>
+      <input id="showFeed" type="checkbox" checked>
+    </div>
+
+    <div class="toggle">
+      <label for="showLeaderboard">Leaderboard</label>
+      <input id="showLeaderboard" type="checkbox" checked>
+    </div>
+
+    <button id="closeSettings" class="alt closeSettings">CLOSE</button>
+  </div>
+</div>
 
 <div id="menu">
 <div id="card">
@@ -322,6 +374,70 @@ function menu(show,text) {
     $('res').innerHTML = text;
   }
 }
+
+// =====================================================
+// SETTINGS
+// =====================================================
+
+const settings = {
+  uiSize: 100,
+  miniMapSize: 100,
+  showFeed: true,
+  showLeaderboard: true
+};
+
+function loadSettings() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('tilerush_settings') || '{}');
+
+    if (Number.isFinite(+saved.uiSize)) {
+      settings.uiSize = Math.max(75, Math.min(140, +saved.uiSize));
+    }
+
+    if (Number.isFinite(+saved.miniMapSize)) {
+      settings.miniMapSize = Math.max(70, Math.min(140, +saved.miniMapSize));
+    }
+
+    if (typeof saved.showFeed === 'boolean') settings.showFeed = saved.showFeed;
+    if (typeof saved.showLeaderboard === 'boolean') settings.showLeaderboard = saved.showLeaderboard;
+  } catch(e) {}
+}
+
+function saveSettings() {
+  try {
+    localStorage.setItem('tilerush_settings', JSON.stringify(settings));
+  } catch(e) {}
+}
+
+function applySettings() {
+  const scale = settings.uiSize / 100;
+
+  $('st').style.setProperty('--hud-scale', scale);
+  $('lb').style.setProperty('--hud-scale', scale);
+  $('feed').style.setProperty('--hud-scale', scale);
+
+  $('feed').style.display = settings.showFeed ? 'block' : 'none';
+  $('lb').style.display = settings.showLeaderboard ? 'block' : 'none';
+
+  $('uiSize').value = settings.uiSize;
+  $('uiSizeValue').textContent = settings.uiSize + '%';
+
+  $('miniMapSize').value = settings.miniMapSize;
+  $('miniMapSizeValue').textContent = settings.miniMapSize + '%';
+
+  $('showFeed').checked = settings.showFeed;
+  $('showLeaderboard').checked = settings.showLeaderboard;
+}
+
+function openSettings() {
+  $('settings').style.display = 'flex';
+}
+
+function closeSettings() {
+  $('settings').style.display = 'none';
+}
+
+loadSettings();
 
 // ---- rejoin support: stable player id + last lobby ----
 function getSid() {
@@ -651,6 +767,16 @@ const KEYS = {
 
 addEventListener('keydown',e => {
 
+  if (e.code === 'KeyP' && document.activeElement.tagName !== 'INPUT') {
+    if ($('settings').style.display === 'flex') {
+      closeSettings();
+    } else {
+      openSettings();
+    }
+    e.preventDefault();
+    return;
+  }
+
   if (document.activeElement.tagName === 'INPUT') {
     if (e.key === 'Enter') $('go').click();
     return;
@@ -725,6 +851,43 @@ $('go').onclick = () => {
   }
 
 };
+
+$('settingsTab').onclick = () => {
+  if ($('settings').style.display === 'flex') closeSettings();
+  else openSettings();
+};
+
+$('closeSettings').onclick = closeSettings;
+
+$('settings').addEventListener('click',e => {
+  if (e.target === $('settings')) closeSettings();
+});
+
+$('uiSize').oninput = () => {
+  settings.uiSize = +$('uiSize').value;
+  applySettings();
+  saveSettings();
+};
+
+$('miniMapSize').oninput = () => {
+  settings.miniMapSize = +$('miniMapSize').value;
+  applySettings();
+  saveSettings();
+};
+
+$('showFeed').onchange = () => {
+  settings.showFeed = $('showFeed').checked;
+  applySettings();
+  saveSettings();
+};
+
+$('showLeaderboard').onchange = () => {
+  settings.showLeaderboard = $('showLeaderboard').checked;
+  applySettings();
+  saveSettings();
+};
+
+applySettings();
 
 // Invite button (shown at launch and after death).
 $('homeInvite').onclick = async () => {
@@ -1127,8 +1290,9 @@ function draw(dt) {
     mg.putImageData(im,0,0);
   }
 
-  // Larger minimap, scaled for smaller screens but capped on desktop.
-  const ms = Math.min(190, Math.max(145, Math.round(Math.min(W,H)*.25)));
+  // Minimap size is adjustable from Settings.
+  const baseMs = Math.min(190, Math.max(145, Math.round(Math.min(W,H)*.25)));
+  const ms = Math.round(baseMs * settings.miniMapSize / 100);
   const mx = W-ms-12;
   const my = H-ms-18;
 
