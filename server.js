@@ -15,29 +15,23 @@ const COLORS = [
   '#4dffd2', '#e0e0ff', '#ffa6ff', '#a6ff00'
 ];
 
-const BOT_NAMES = [
-  'SilentRogue', 'DripPhantom', 'XenoRush', 'Blvckout', 'ToxicOrbit',
-  'LunarFlex', 'GrimPulse', 'ZeroMercy', 'RiftKing', 'ShadowVex',
-  'PixelReaper', 'TurboGhost', 'NightShift', 'VenomSync', 'ChaosBloom',
-  'FrostVandal', 'WraithMode', 'GhostTheory', 'AimlessGod', 'NovaStrike',
-  'DeadSilence', 'SavageCircuit', 'CrypticSoul', 'RageTheory', 'EchoSlayer',
-  'NeonWraith', 'PhantomDrift', 'VortexX', 'NoScopeNoodle', 'LagLegend',
-  'CerealKiller', 'SneakyGoblin', 'WiFiWarrior', 'BonkMaster', 'LootGremlin',
-  'PotatoAim', 'RespawnEnjoyer', 'YeetProtocol', 'ChaosPenguin', 'CrayonBandit',
-  'SirCampALot', 'UnpaidNPC', 'CtrlAltDefeat', 'PixelPanic', 'SweatyTurtle',
-  'AimBotAdjacent', 'MidnightMango', 'KeyboardGoblin', 'ClutchOrKick',
-  'ProbablyAFK', 'SpawnSniper', 'TouchGrassLater', 'SkillIssueEnjoyer',
-  'BigLagEnergy', 'ButtonMasher', 'DoomScroll', 'TinyTerror', 'GGNoRe'
+const BOTS = [
+  'Deadlock',
+  'Rifted',
+  'HavocX',
+  'Wraithen',
+  'NoMercy',
+  'Recoilz',
+  'Shatter',
+  'Outaimed',
+  'Headtap',
+  'Erased',
+  'Cracked',
+  'OneClip',
+  'Destroyd',
+  'Unfazed',
+  'ZeroPinggo'
 ];
-
-function randomBotNames(count) {
-  const names = [...BOT_NAMES];
-  for (let i = names.length - 1; i > 0; i--) {
-    const j = Math.random() * (i + 1) | 0;
-    [names[i], names[j]] = [names[j], names[i]];
-  }
-  return names.slice(0, count);
-}
 
 const ix = (x, y) => y * N + x;
 
@@ -117,9 +111,6 @@ function Game(code, onEmpty) {
       shield: 0,
       out: 0,
       limit: 8,
-      plan: null,
-      skill: .7 + Math.random() * .3,
-      aggr: .2 + Math.random() * .7,
       respawn: id * .4,
       kills: 0,
       area: 0,
@@ -134,9 +125,7 @@ function Game(code, onEmpty) {
     };
   }
 
-  const lobbyBotNames = randomBotNames(SLOTS);
   ents = Array.from({ length: SLOTS }, (_, i) => mk(i + 1));
-  ents.forEach((e, i) => { e.name = lobbyBotNames[i]; });
 
 
   function spawn(e) {
@@ -195,7 +184,6 @@ function Game(code, onEmpty) {
       fuse: null,
       fuseAcc: 0,
       stopped: false,
-      plan: null,
       home: { x, y }
     });
   }
@@ -228,333 +216,63 @@ function Game(code, onEmpty) {
   }
 
 
-  // ====== Bot AI ======
-  // Each tick a bot runs a short breadth-first scan from its head to find the
-  // nearest way home, the nearest rival trail it could cut, and the nearest
-  // powerup. It then decides between: grabbing a powerup, hunting, running
-  // home (when a rival could cut its trail first), or walking an expansion loop.
-  const seen = new Int32Array(N * N);
-  const first = new Int8Array(N * N);
-  const dist = new Int16Array(N * N);
-  const bq = new Int32Array(N * N);
-  let stamp = 0;
-
-  const speedOf = o => (o.boost > 0 ? 1.6 : 1) * (o.bot ? .9 : 1);
-
-  const room = (e, k) => {
-    const d = D[k];
-    return d[0] ? (d[0] > 0 ? N - 1 - e.x : e.x) : (d[1] > 0 ? N - 1 - e.y : e.y);
-  };
-
-  function insideRun(e, k) {
-    const d = D[k];
-    let x = e.x + d[0], y = e.y + d[1], n = 0;
-
-    while (x >= 0 && y >= 0 && x < N && y < N && own[ix(x, y)] === e.id) {
-      n++;
-      x += d[0];
-      y += d[1];
-    }
-
-    return n;
-  }
-
-  function scan(e, maxD) {
-    stamp++;
-
-    const puAt = new Map();
-    for (const p of pu) puAt.set(ix(p.x, p.y), p);
-
-    const s = ix(e.x, e.y);
-    const r = { home: null, prey: [], pu: null };
-    let h = 0, t = 0;
-
-    bq[t++] = s;
-    seen[s] = stamp;
-    dist[s] = 0;
-
-    while (h < t) {
-      const c = bq[h++];
-      const cd = dist[c];
-      if (cd >= maxD) continue;
-
-      const cx = c % N, cy = (c / N) | 0;
-
-      for (let k = 0; k < 4; k++) {
-        const nx = cx + D[k][0], ny = cy + D[k][1];
-        if (nx < 0 || ny < 0 || nx >= N || ny >= N) continue;
-
-        const n = ny * N + nx;
-        if (seen[n] === stamp || trl[n] === e.id) continue;
-
-        seen[n] = stamp;
-        dist[n] = cd + 1;
-        first[n] = cd === 0 ? k : first[c];
-        bq[t++] = n;
-
-        if (own[n] === e.id && !r.home) {
-          r.home = { d: cd + 1, k: first[n] };
-        }
-
-        const tv = trl[n];
-
-        if (tv && r.prey.length < 8) {
-          const v = ents[tv - 1];
-          if (v.alive && v.shield <= 0) {
-            r.prey.push({ i: n, d: cd + 1, k: first[n], v });
-          }
-        }
-
-        if (!r.pu) {
-          const p = puAt.get(n);
-          if (p) r.pu = { d: cd + 1, k: first[n], type: p.type };
-        }
-      }
-    }
-
-    return r;
-  }
-
-  // prefer cutting close to the rival's head: less trail left = harder to survive the fuse
-  function bestPrey(list) {
-    let b = null, bs = 1e9;
-
-    for (const p of list) {
-      const k = p.v.trail.indexOf(p.i);
-      if (k < 0) continue;
-
-      const s = p.d + (p.v.trail.length - 1 - k) * .25;
-      if (s < bs) {
-        bs = s;
-        b = p;
-      }
-    }
-
-    return b;
-  }
-
-  // can any rival reach my trail before I get home? (or am I in a tower's reclaim zone?)
-  function threatened(e, homeD) {
-    for (const t of towers) {
-      if (!t.o || t.o === e.id || !ents[t.o - 1].alive) continue;
-
-      const dx = e.x - t.x, dy = e.y - t.y;
-
-      if (dx * dx + dy * dy <= (t.r + 1) * (t.r + 1) && (t.wv || (t.cd || 0) > 2.5)) {
-        return true;
-      }
-    }
-
-    if (e.shield > 0) return false;
-
-    const tMe = homeD / speedOf(e) + 1.5 + e.skill * 2;
-
-    for (const o of ents) {
-      if (o === e || !o.alive) continue;
-
-      const sp = speedOf(o);
-
-      for (let j = 0; j < e.trail.length; j += 2) {
-        const ti = e.trail[j];
-        const d = (Math.abs(ti % N - o.x) + Math.abs((ti / N | 0) - o.y)) / sp;
-        if (d < tMe) return true;
-      }
-    }
-
-    return false;
-  }
-
-  // an expansion loop: out, across, back (rectangle with one side on my own land)
-  function makePlan(e) {
-    const reach = 4 + Math.min(12, Math.round(Math.sqrt(e.area) * 2.5));
-    let k1 = -1, k2 = 0, a = 0, b = 0;
-
-    // sometimes aim the loop at a tower so it gets enclosed
-    let tg = null, bd = 1e9;
-
-    for (const t of towers) {
-      if (t.o === e.id) continue;
-
-      const rival = t.o && ents[t.o - 1].alive;
-      if (rival && Math.random() > .25 * e.aggr) continue;
-
-      const d = Math.abs(t.x - e.x) + Math.abs(t.y - e.y);
-
-      if (d < bd && d <= 14 + reach * 2) {
-        bd = d;
-        tg = t;
-      }
-    }
-
-    if (tg && Math.random() < .7) {
-      const vx = tg.x - e.x, vy = tg.y - e.y;
-
-      if (Math.abs(vx) >= Math.abs(vy)) {
-        k1 = vx >= 0 ? 1 : 3; a = Math.abs(vx) + 4;
-        k2 = vy >= 0 ? 2 : 0; b = Math.abs(vy) + 4;
-      } else {
-        k1 = vy >= 0 ? 2 : 0; a = Math.abs(vy) + 4;
-        k2 = vx >= 0 ? 1 : 3; b = Math.abs(vx) + 4;
-      }
-    }
-
-    if (k1 < 0 || a > room(e, k1) - 1 || b > room(e, k2) - 1) {
-      const ks = [0, 1, 2, 3]
-        .map(k => ({ k, w: room(e, k) * (.5 + Math.random()) }))
-        .sort((x, y) => y.w - x.w);
-
-      k1 = ks[Math.random() < .7 ? 0 : 1].k;
-
-      const sides = [(k1 + 1) % 4, (k1 + 3) % 4];
-      k2 = room(e, sides[0]) * Math.random() > room(e, sides[1]) * Math.random()
-        ? sides[0]
-        : sides[1];
-
-      a = reach + (Math.random() * 5 | 0);
-      b = Math.max(3, Math.round(reach * .7) + (Math.random() * 4 | 0));
-    }
-
-    a = Math.max(3, Math.min(a, room(e, k1) - 1));
-    b = Math.max(3, Math.min(b, room(e, k2) - 1));
-
-    return {
-      i: 0,
-      out: false,
-      legs: [
-        { k: k1, n: Math.max(3, a - insideRun(e, k1)) },
-        { k: k2, n: b },
-        { k: (k1 + 2) % 4, n: a + 2 }
-      ]
-    };
-  }
-
-  // next step of the current plan; counts only steps taken off my own land
-  function follow(e) {
-    const p = e.plan;
-
-    while (p && p.i < p.legs.length) {
-      const L = p.legs[p.i];
-      const d = D[L.k];
-
-      if (L.n <= 0 || blocked(e, d[0], d[1])) {
-        p.i++;
-        continue;
-      }
-
-      if (own[ix(e.x + d[0], e.y + d[1])] !== e.id) L.n--;
-      return L.k;
-    }
-
-    return null;
-  }
-
-  // standing on my own land
-  function idle(e, sc) {
-    if (e.plan) {
-      const k = follow(e);
-      if (k !== null) return k;
-      e.plan = null;
-    }
-
-    if (sc.pu && sc.pu.d <= 10 + 6 * e.skill) return sc.pu.k;
-
-    if (e.aggr > .35 && sc.prey.length) {
-      const p = bestPrey(sc.prey);
-      if (p && p.d <= 10 + 18 * e.aggr) return p.k;
-    }
-
-    e.plan = makePlan(e);
-    return follow(e);
-  }
-
-  // out in the open with a trail
-  function roam(e, sc) {
-    const homeD = sc.home ? sc.home.d : 999;
-    const home = sc.home ? sc.home.k : null;
-    const prey = bestPrey(sc.prey);
-
-    if (threatened(e, homeD)) {
-      if (prey && prey.d === 1 && homeD > 3) return prey.k;
-      return home;
-    }
-
-    if (e.trail.length > 28 + 40 * e.skill) return home;
-    if (prey && prey.d <= 6 && homeD + prey.d <= 40) return prey.k;
-    if (sc.pu && sc.pu.d <= 3 && homeD < 25) return sc.pu.k;
-
-    if (e.plan) {
-      const k = follow(e);
-      if (k !== null) return k;
-    }
-
-    return home;
-  }
-
-  // apply the wanted direction, but never into a wall, my own trail, or a dead end
-  function steer(e, want, inside) {
-    let best = -1e9, bk = -1;
-
-    for (let k = 0; k < 4; k++) {
-      const d = D[k];
-      if (blocked(e, d[0], d[1])) continue;
-
-      const nx = e.x + d[0], ny = e.y + d[1];
-      let s = Math.random();
-
-      if (k === want) s += 100;
-      if (d[0] === e.dx && d[1] === e.dy) s += .5;
-
-      let ex = 0;
-
-      for (let j = 0; j < 4; j++) {
-        const mx = nx + D[j][0], my = ny + D[j][1];
-        if (mx < 0 || my < 0 || mx >= N || my >= N) continue;
-        if (!inside && mx === e.x && my === e.y) continue; // the tile I leave becomes trail
-        if (trl[ix(mx, my)] === e.id) continue;
-        ex++;
-      }
-
-      if (ex === 0) s -= 200;
-      else if (ex === 1) s -= 4;
-
-      let run = 0, rx = nx, ry = ny;
-
-      while (run < 5) {
-        rx += d[0];
-        ry += d[1];
-        if (rx < 0 || ry < 0 || rx >= N || ry >= N || trl[ix(rx, ry)] === e.id) break;
-        run++;
-      }
-
-      s += run * .6;
-
-      if (s > best) {
-        best = s;
-        bk = k;
-      }
-    }
-
-    if (bk >= 0) {
-      e.dx = D[bk][0];
-      e.dy = D[bk][1];
-    }
-  }
-
+  // Bot AI
   function ai(e) {
     const inside = own[ix(e.x, e.y)] === e.id;
 
     if (inside) {
-      if (e.plan && e.plan.out) e.plan = null; // made it home: loop finished
-      e.out = 0;
+      if (!e.trail.length) {
+        e.out = 0;
+        e.limit = 6 + (Math.random() * 16 | 0);
+      }
     } else {
       e.out++;
-      if (e.plan) e.plan.out = true;
     }
 
-    const sc = scan(e, inside ? 30 : 50);
-    const k = inside ? idle(e, sc) : roam(e, sc);
+    const c = [
+      [e.dx, e.dy],
+      [-e.dy, e.dx],
+      [e.dy, -e.dx]
+    ];
 
-    steer(e, k === null ? -1 : k, inside);
+    let want = null;
+
+    if (!inside && e.out > e.limit) {
+      const hx = e.home.x - e.x;
+      const hy = e.home.y - e.y;
+
+      const hd = Math.abs(hx) > Math.abs(hy)
+        ? [Math.sign(hx), 0]
+        : [0, Math.sign(hy)];
+
+      if (
+        (hd[0] || hd[1]) &&
+        !(hd[0] === -e.dx && hd[1] === -e.dy) &&
+        !blocked(e, hd[0], hd[1])
+      ) {
+        want = hd;
+      }
+
+    } else if (Math.random() < (inside ? .08 : .1)) {
+      want = c[1 + (Math.random() < .5 ? 1 : 0)];
+    }
+
+    if (want && !blocked(e, want[0], want[1])) {
+      e.dx = want[0];
+      e.dy = want[1];
+    }
+
+    if (blocked(e, e.dx, e.dy)) {
+      const ok = c.slice(1).filter(
+        d => !blocked(e, d[0], d[1])
+      );
+
+      if (ok.length) {
+        const d = ok[Math.random() * ok.length | 0];
+        e.dx = d[0];
+        e.dy = d[1];
+      }
+    }
   }
 
 
@@ -1288,9 +1006,7 @@ function Game(code, onEmpty) {
       e.ws = null;
       e.bot = true;
       e.hold = Date.now() + 60000;
-      const used = new Set(ents.filter(x => x !== e).map(x => x.name));
-      const available = BOT_NAMES.filter(n => !used.has(n));
-      e.name = available[Math.random() * available.length | 0] || ('Player' + e.id);
+      e.name = BOTS[e.id - 1];
 
       if (!e.alive) {
         e.respawn = 3;
