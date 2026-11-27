@@ -1061,7 +1061,7 @@ function pick(code, rejoin) {
 // ====== HTTP AND WEBSOCKET SERVER ======
 const server = http.createServer((req, res) => {
   res.writeHead(200);
-  res.end('Tile Rush server OK');
+  res.end('TileSnake.io is Online (Check Cloudflare)');
 });
 
 const wss = new WebSocketServer({
@@ -1113,5 +1113,5 @@ wss.on('connection', ws => {
 const PORT = process.env.PORT || 8080;
 
 server.listen(PORT, () => {
-  console.log('Tile Rush server on :' + PORT);
+  console.log('TileSnake.io server on :' + PORT);
 });
