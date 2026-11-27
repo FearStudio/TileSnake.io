@@ -295,7 +295,7 @@ const rgb = COLORS.map(c => [
 
 const $ = id => document.getElementById(id);
 
-const settings = {uiSize:100, miniMapSize:100, showFeed:true, showLeaderboard:true};
+const settings = {uiSize:120, miniMapSize:100, showFeed:true, showLeaderboard:true};
 function loadSettings(){try{Object.assign(settings,JSON.parse(localStorage.getItem('tilerush_settings')||'{}'));}catch(e){}}
 function saveSettings(){try{localStorage.setItem('tilerush_settings',JSON.stringify(settings));}catch(e){}}
 function applySettings(){
