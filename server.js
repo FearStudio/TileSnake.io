@@ -5,6 +5,7 @@ const http = require('http');
 const { WebSocketServer } = require('ws');
 
 const N = 90, STEP = .12, SLOTS = 12, TICK = 40;
+const TOWER_PULSE = 5; // seconds between reclaim shots when rivals have taken land in a tower's radius
 
 const D = [[0, -1], [1, 0], [0, 1], [-1, 0]];
 
@@ -450,6 +451,20 @@ function Game(code, onEmpty) {
   }
 
 
+  // how many tiles inside the tower's radius are not its owner's colour
+  function needsReclaim(t) {
+    let n = 0;
+
+    for (let y = Math.max(0, t.y - t.r); y <= Math.min(N - 1, t.y + t.r); y++) {
+      for (let x = Math.max(0, t.x - t.r); x <= Math.min(N - 1, t.x + t.r); x++) {
+        if ((x - t.x) * (x - t.x) + (y - t.y) * (y - t.y) > t.r * t.r) continue;
+        if (own[ix(x, y)] !== t.o && ++n >= 3) return true;
+      }
+    }
+
+    return false;
+  }
+
   function towerCheck() {
     for (const t of towers) {
       if (t.o && !ents[t.o - 1].alive) {
@@ -647,6 +662,22 @@ function Game(code, onEmpty) {
 
     towerCheck();
 
+    // owned towers shoot their colour back out to reclaim land rivals took inside the radius
+    for (const t of towers) {
+      if (!t.o || t.wv || !ents[t.o - 1].alive || !needsReclaim(t)) {
+        t.cd = 0;
+        continue;
+      }
+
+      t.cd = (t.cd || 0) + dt;
+
+      if (t.cd >= TOWER_PULSE) {
+        t.cd = 0;
+        t.wv = { r: 0, o: t.o };
+        pop(t.x, t.y, 'RECLAIM', COLORS[t.o - 1]);
+      }
+    }
+
     for (const t of towers) {
       const w = t.wv;
       if (!w) continue;
@@ -733,7 +764,8 @@ function Game(code, onEmpty) {
         r: t.r,
         o: t.o,
         w: t.wv ? t.wv.r : -1,
-        wo: t.wv ? t.wv.o : 0
+        wo: t.wv ? t.wv.o : 0,
+        c: t.o && t.cd ? Math.min(1, t.cd / TOWER_PULSE) : 0
       })),
 
       ev

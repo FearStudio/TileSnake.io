@@ -949,6 +949,23 @@ function draw(dt) {
 
     g.restore();
 
+    // recharge ring: the tower is about to shoot its colour back out
+    if (t.o && t.c > 0 && t.w < 0) {
+
+      g.save();
+
+      g.strokeStyle = COLORS[t.o-1];
+      g.lineWidth = 3;
+      g.shadowColor = g.strokeStyle;
+      g.shadowBlur = 12;
+
+      g.beginPath();
+      g.arc(cx,cy,T*.62,-Math.PI/2,-Math.PI/2+Math.PI*2*t.c);
+      g.stroke();
+
+      g.restore();
+    }
+
     if (t.w >= 0) {
 
       g.save();
