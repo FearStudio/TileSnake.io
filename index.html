@@ -55,10 +55,6 @@ Kills <span id="kl">0</span> · Best <span id="bst">0%</span>
 <button id="go">PLAY</button>
 
 <button id="homeInvite" class="alt">
-INVITE FRIENDS
-</button>
-
-<button id="inv" class="alt" style="display:none">
 COPY INVITE LINK
 </button>
 
@@ -234,9 +230,7 @@ async function copyInviteLink(button) {
   button.textContent = 'INVITE LINK COPIED!';
 
   setTimeout(() => {
-    button.textContent = button.id === 'homeInvite'
-      ? 'INVITE FRIENDS'
-      : 'COPY INVITE LINK';
+    button.textContent = 'COPY INVITE LINK';
   }, 2000);
 }
 
@@ -424,8 +418,6 @@ function onMsg(m) {
     $('feed').innerHTML = '';
 
     menu(false,'');
-
-    $('inv').style.display = 'block';
 
     updateCrazyGamesRoom();
 
@@ -641,7 +633,7 @@ $('go').onclick = () => {
 
 };
 
-// Home-page invite button.
+// Invite button (shown at launch and after death).
 $('homeInvite').onclick = async () => {
 
   const btn = $('homeInvite');
@@ -671,28 +663,9 @@ $('homeInvite').onclick = async () => {
     btn.textContent = 'INVITE LINK UNAVAILABLE';
 
     setTimeout(() => {
-      btn.textContent = 'INVITE FRIENDS';
-    },2000);
-
-  }
-};
-
-// In-game invite button.
-$('inv').onclick = async () => {
-
-  const btn = $('inv');
-
-  try {
-    await copyInviteLink(btn);
-  } catch(e) {
-
-    console.error('[Invite]',e);
-
-    btn.textContent = 'COULD NOT COPY LINK';
-
-    setTimeout(() => {
       btn.textContent = 'COPY INVITE LINK';
     },2000);
+
   }
 };
 
