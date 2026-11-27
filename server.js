@@ -5,7 +5,7 @@ const http = require('http');
 const { WebSocketServer } = require('ws');
 
 const N = 90, STEP = .12, SLOTS = 12, TICK = 40;
-const TOWER_PULSE = 5; // seconds between reclaim shots when rivals have taken land in a tower's radius
+const TOWER_PULSE = 5;
 
 const D = [[0, -1], [1, 0], [0, 1], [-1, 0]];
 
@@ -15,22 +15,40 @@ const COLORS = [
   '#4dffd2', '#e0e0ff', '#ffa6ff', '#a6ff00'
 ];
 
+// Expanded bot name pool
 const BOTS = [
-  'Deadlock',
-  'Rifted',
-  'HavocX',
-  'Wraithen',
-  'NoMercy',
-  'Recoilz',
-  'Shatter',
-  'Outaimed',
-  'Headtap',
-  'Erased',
-  'Cracked',
-  'OneClip',
-  'Destroyd',
-  'Unfazed',
-  'ZeroPinggo'
+  'Deadlock','Rifted','HavocX','Wraithen','NoMercy',
+  'Recoilz','Shatter','Outaimed','Headtap','Erased',
+  'Cracked','OneClip','Destroyd','Unfazed','ZeroPinggo',
+  'ShadowRush','ToxicNova','Vortex','BlitzKing','GhostMode',
+  'PixelFury','StormByte','NightRaid','CyberWolf','VenomShot',
+  'FrostBite','RapidFire','DarkPulse','SteelNerve','WildCard',
+  'AimStorm','NovaStrike','EchoBlade','TurboSnake','RedZone',
+  'SkyHunter','LunarFang','DuskRunner','ZeroFear','KillSwitch',
+  'NeonGhost','RageQuit','ArcFlash','SilentRush','DriftKing',
+  'AlphaCore','OmegaRush','FireStorm','IceBreaker','VoidWalker',
+  'LuckyShot','MindGames','QuickScope','FinalBoss','SnakeByte',
+  'ShadowX','BlueVenom','NightFury','ChaosMode','WarpSpeed',
+  'LaserLine','DemonDash','CloudNine','DarkMatter','StarFang',
+  'IronClaw','MoonStrike','ThunderX','GhostRider','FeralByte',
+  'CyberDash','FlameCore','ApexPred','StormChaser','SwiftKill',
+  'HyperNova','GlitchLord','TalonX','EdgeRunner','ColdSnap',
+  'MysticRush','SnakeKing','PowerSlide','VoidStorm','NeonBlade',
+  'DustDevil','RapidRift','ZeroZone','PixelStorm','FangForce',
+  'ShadowByte','CrimsonX','BlueStorm','NightShift','WildFang',
+  'TurboFang','NovaGhost','RiftRunner','ToxicRush','SteelSnake',
+  'FlashPoint','DreadNova','GhostByte','DarkRunner','StormFang',
+  'ViperX','EchoRush','FrostNova','BlazeDash','SilentByte',
+  'LoneWolf','ChaosX','HyperFang','RoguePixel','NightBlade',
+  'VenomCore','SkyRift','FireByte','IceStorm','SwiftFang',
+  'NeonRush','ShadowCore','ArcHunter','VoidFang','PixelRogue',
+  'ThunderByte','DuskFang','RapidNova','GhostDash','WildNova',
+  'CyberFang','DarkRush','BlitzByte','StormRider','FrostDash',
+  'LunarRush','SnakeStorm','FlameDash','ZeroFang','RiftBlade',
+  'EchoStorm','IronByte','NightNova','ToxicFang','ApexRush',
+  'GlitchX','ColdFang','WarpRider','MysticByte','DemonFang',
+  'SkyNova','RogueRush','VenomDash','NeonStorm','VoidRush',
+  'ShadowFang','TurboNova','PixelDash','BlazeFang','SilentNova'
 ];
 
 const ix = (x, y) => y * N + x;
@@ -46,7 +64,6 @@ const clean = n =>
     .replace(/[^\w .-]/g, '')
     .trim()
     .slice(0, 12) || 'Player';
-
 
 function Game(code, onEmpty) {
   const own = new Int8Array(N * N);
@@ -82,7 +99,6 @@ function Game(code, onEmpty) {
   const pop = (x, y, txt, col) =>
     ev.push({ k: 'pop', x, y, txt, col });
 
-
   // Generate towers
   for (let k = 0; k < 500 && towers.length < 7; k++) {
     const x = 8 + (Math.random() * (N - 16) | 0);
@@ -97,6 +113,21 @@ function Game(code, onEmpty) {
     }
   }
 
+  // Pick a fresh bot name, avoiding names used by other living bots
+  function botName(e) {
+    const used = new Set(
+      ents
+        .filter(x => x !== e && x.bot && x.alive)
+        .map(x => x.name)
+    );
+
+    const choices = BOTS.filter(n => n !== e.name && !used.has(n));
+    const pool = choices.length
+      ? choices
+      : BOTS.filter(n => n !== e.name);
+
+    return pool[Math.random() * pool.length | 0] || BOTS[0];
+  }
 
   function mk(id) {
     return {
@@ -127,8 +158,9 @@ function Game(code, onEmpty) {
 
   ents = Array.from({ length: SLOTS }, (_, i) => mk(i + 1));
 
-
   function spawn(e) {
+    if (e.bot) e.name = botName(e);
+
     let x = 0;
     let y = 0;
 
@@ -188,7 +220,6 @@ function Game(code, onEmpty) {
     });
   }
 
-
   function clear(e) {
     for (const i of e.trail) {
       st(i, 0);
@@ -203,7 +234,6 @@ function Game(code, onEmpty) {
     }
   }
 
-
   function blocked(e, dx, dy) {
     const x = e.x + dx;
     const y = e.y + dy;
@@ -214,7 +244,6 @@ function Game(code, onEmpty) {
 
     return trl[ix(x, y)] === e.id;
   }
-
 
   // Bot AI
   function ai(e) {
@@ -275,7 +304,6 @@ function Game(code, onEmpty) {
     }
   }
 
-
   function hit(v, k) {
     if (v.shield > 0) {
       v.shield = 0;
@@ -286,7 +314,6 @@ function Game(code, onEmpty) {
     die(v, k);
     return true;
   }
-
 
   function cut(v, k, killer) {
     if (v.shield > 0) {
@@ -311,7 +338,6 @@ function Game(code, onEmpty) {
 
     pop(ci % N, ci / N | 0, 'CUT!', '#ff2e88');
   }
-
 
   function die(v, k) {
     v.alive = false;
@@ -338,7 +364,6 @@ function Game(code, onEmpty) {
       v.respawn = 3;
     }
   }
-
 
   function capture(e) {
     e.fuse = null;
@@ -419,8 +444,7 @@ function Game(code, onEmpty) {
     }
   }
 
-
-  function wave(z) {
+    function wave(z) {
     const o = ents[z.o - 1];
 
     for (
@@ -462,7 +486,6 @@ function Game(code, onEmpty) {
       }
     }
   }
-
 
   // how many tiles inside the tower's radius are not its owner's colour
   function needsReclaim(t) {
@@ -520,7 +543,6 @@ function Game(code, onEmpty) {
       }
     }
   }
-
 
   function step(e) {
     if (e.bot) {
@@ -609,7 +631,6 @@ function Game(code, onEmpty) {
     }
   }
 
-
   function update(dt) {
     for (const e of ents) {
       if (!e.alive) {
@@ -675,7 +696,7 @@ function Game(code, onEmpty) {
 
     towerCheck();
 
-    // owned towers shoot their colour back out to reclaim land rivals took inside the radius
+    // owned towers reclaim land inside their radius
     for (const t of towers) {
       if (!t.o || t.wv || !ents[t.o - 1].alive || !needsReclaim(t)) {
         t.cd = 0;
@@ -738,7 +759,6 @@ function Game(code, onEmpty) {
     }
   }
 
-
   function broadcast() {
     const d = [];
 
@@ -793,9 +813,7 @@ function Game(code, onEmpty) {
     }
   }
 
-
   const humans = () => ents.filter(e => e.ws).length;
-
 
   function loop() {
     const now = Date.now();
@@ -806,7 +824,6 @@ function Game(code, onEmpty) {
     broadcast();
   }
 
-
   function start() {
     clearTimeout(emptyTimer);
 
@@ -815,7 +832,6 @@ function Game(code, onEmpty) {
       timer = setInterval(loop, TICK);
     }
   }
-
 
   function stop() {
     clearInterval(timer);
@@ -826,8 +842,7 @@ function Game(code, onEmpty) {
     }, 600000);
   }
 
-
-  return {
+    return {
     code,
     pub: false,
 
@@ -838,12 +853,11 @@ function Game(code, onEmpty) {
 
       let e = null;
 
-      // 1) Same player coming back (reload / dropped connection): give their slot back.
+      // 1) Same player coming back (reload / dropped connection)
       if (sid) {
         e = ents.find(x => x.sid === sid && (x.bot || x.ws));
 
         if (e && e.ws && e.ws !== ws) {
-          // opened in a second tab: move them over and tell the old tab
           const old = e.ws;
           old.ent = null;
           old.game = null;
@@ -855,7 +869,7 @@ function Game(code, onEmpty) {
 
       const reclaimed = !!e;
 
-      // 2) Someone new: take over a bot (slots held for a recent leaver go last).
+      // 2) Someone new: take over a bot
       if (!e) {
         const now = Date.now();
 
@@ -911,7 +925,6 @@ function Game(code, onEmpty) {
       return true;
     },
 
-
     play(e, name) {
       if (!e.alive) {
         e.name = clean(name);
@@ -936,7 +949,6 @@ function Game(code, onEmpty) {
       });
     },
 
-
     dir(e, d) {
       if (!e.alive || !(d >= 0 && d < 4)) return;
 
@@ -960,8 +972,7 @@ function Game(code, onEmpty) {
         return;
       }
 
-      // moving: pressing the opposite of where you're heading stops you in place
-      // (counts a turn you've just queued as your heading, so it works right after turning too)
+      // Opposite direction stops the player
       const hd = e.q !== null ? D[e.q] : [e.dx, e.dy];
 
       if (nd[0] === -hd[0] && nd[1] === -hd[1]) {
@@ -978,8 +989,7 @@ function Game(code, onEmpty) {
       e.q = d;
     },
 
-
-    // stop / go toggle (space bar or tap): works in any direction
+    // stop / go toggle
     stop(e) {
       if (!e.alive) return;
 
@@ -998,7 +1008,6 @@ function Game(code, onEmpty) {
       e.stopped = true;
     },
 
-
     leave(ws) {
       const e = ws.ent;
       if (!e) return;
@@ -1006,7 +1015,9 @@ function Game(code, onEmpty) {
       e.ws = null;
       e.bot = true;
       e.hold = Date.now() + 60000;
-      e.name = BOTS[e.id - 1];
+
+      // Give the returning bot a fresh identity
+      e.name = botName(e);
 
       if (!e.alive) {
         e.respawn = 3;
@@ -1021,20 +1032,17 @@ function Game(code, onEmpty) {
   };
 }
 
-
 // ====== ROOMS ======
 const rooms = new Map();
 let pc = 0;
 
 const drop = c => rooms.delete(c);
 
-
 function pick(code, rejoin) {
   if (code && /^[A-Za-z0-9_-]{1,16}$/.test(code)) {
     let g = rooms.get(code);
 
     if (!g) {
-      // coming back to a lobby that no longer exists: go to a public lobby instead
       if (rejoin) return pick('');
 
       g = Game(code, drop);
@@ -1057,7 +1065,6 @@ function pick(code, rejoin) {
   return g;
 }
 
-
 // ====== HTTP AND WEBSOCKET SERVER ======
 const server = http.createServer((req, res) => {
   res.writeHead(200);
@@ -1069,9 +1076,9 @@ const wss = new WebSocketServer({
   maxPayload: 512
 });
 
-
 wss.on('connection', ws => {
   if (ws._socket) ws._socket.setNoDelay(true);
+
   ws.on('message', raw => {
     let m;
 
@@ -1108,7 +1115,6 @@ wss.on('connection', ws => {
 
   ws.on('error', () => {});
 });
-
 
 const PORT = process.env.PORT || 8080;
 
