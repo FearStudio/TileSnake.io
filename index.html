@@ -43,6 +43,10 @@ button:disabled{opacity:.55;cursor:wait}
 #st{transform:scale(var(--hud-scale));transform-origin:top left}
 #lb{transform:scale(var(--hud-scale));transform-origin:top right}
 #feed{transform:scale(var(--hud-scale));transform-origin:top left}
+/* Keep every on-screen interface panel at the selected UI scale. */
+#card{transform:scale(var(--hud-scale))}
+#settingsCard{transform:scale(var(--hud-scale))}
+#settingsTab{transform:scale(var(--hud-scale));transform-origin:bottom left}
 #menu{z-index:10}
 </style>
 </head>
@@ -295,8 +299,13 @@ const rgb = COLORS.map(c => [
 
 const $ = id => document.getElementById(id);
 
-const settings = {uiSize:120, miniMapSize:100, showFeed:true, showLeaderboard:true};
-function loadSettings(){try{Object.assign(settings,JSON.parse(localStorage.getItem('tilerush_settings')||'{}'));}catch(e){}}
+const settings = {uiSize:120, miniMapSize:120, showFeed:true, showLeaderboard:true};
+function loadSettings(){
+  try{Object.assign(settings,JSON.parse(localStorage.getItem('tilerush_settings')||'{}'));}catch(e){}
+  // Start at 120% even if an older saved preference used a smaller size.
+  settings.uiSize=120;
+  settings.miniMapSize=120;
+}
 function saveSettings(){try{localStorage.setItem('tilerush_settings',JSON.stringify(settings));}catch(e){}}
 function applySettings(){
   const scale=settings.uiSize/100;
