@@ -1,4 +1,4 @@
-// Tile Rush — authoritative multiplayer server.
+// Tile Snake.io — authoritative multiplayer server.
 // Run: npm i && node server.js
 
 const http = require('http');
