@@ -4,7 +4,7 @@
 const http = require('http');
 const { WebSocketServer } = require('ws');
 
-const N = 90, STEP = .12, SLOTS = 12, TICK = 33;
+const N = 90, STEP = .12, SLOTS = 12, TICK = 40;
 
 const D = [[0, -1], [1, 0], [0, 1], [-1, 0]];
 
@@ -922,6 +922,7 @@ const wss = new WebSocketServer({
 
 
 wss.on('connection', ws => {
+  if (ws._socket) ws._socket.setNoDelay(true);
   ws.on('message', raw => {
     let m;
 

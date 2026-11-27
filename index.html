@@ -19,12 +19,13 @@ canvas{position:fixed;inset:0;width:100%;height:100%;touch-action:none}
 #feed{position:fixed;left:10px;top:calc(env(safe-area-inset-top,0px) + 82px);font-size:12px;pointer-events:none}
 #feed div{background:var(--panel);margin-bottom:4px;padding:3px 8px;border-radius:8px;width:max-content}
 #menu{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(5,6,12,.72)}
-#card{background:var(--panel);border:1px solid var(--acc);border-radius:18px;padding:28px 32px;text-align:center;box-shadow:0 0 40px rgba(0,240,255,.25);max-width:340px}
+#card{background:var(--panel);border:1px solid var(--acc);border-radius:18px;padding:28px 32px;text-align:center;box-shadow:0 0 40px rgba(0,240,255,.25);max-width:340px;width:calc(100% - 64px)}
 h1{margin:0;font-size:38px;letter-spacing:3px;background:linear-gradient(90deg,var(--acc),var(--acc2));-webkit-background-clip:text;background-clip:text;color:transparent}
 .sub{opacity:.6;font-size:12px;letter-spacing:2px;margin:4px 0 18px}
 input{width:100%;box-sizing:border-box;padding:10px;border-radius:10px;border:1px solid rgba(0,240,255,.4);background:#0b0e1c;color:var(--fg);font-size:16px;text-align:center;margin-bottom:12px}
 button{width:100%;padding:12px;border:0;border-radius:10px;font-size:17px;font-weight:700;letter-spacing:2px;color:#05060c;background:linear-gradient(90deg,var(--acc),var(--acc2));cursor:pointer}
-button.alt{background:transparent;color:var(--acc);border:1px solid var(--acc);font-size:13px;margin-top:8px;padding:8px}
+button.alt{background:transparent;color:var(--acc);border:1px solid var(--acc);font-size:13px;margin-top:8px;padding:9px}
+button:disabled{opacity:.55;cursor:wait}
 .help{font-size:12px;opacity:.7;margin-top:14px;line-height:1.6}
 #res{margin-bottom:14px;font-size:15px;line-height:1.6;min-height:4px}
 </style>
@@ -52,6 +53,10 @@ Kills <span id="kl">0</span> · Best <span id="bst">0%</span>
 <input id="nm" maxlength="12" placeholder="Enter your name" autocomplete="off">
 
 <button id="go">PLAY</button>
+
+<button id="homeInvite" class="alt">
+INVITE FRIENDS
+</button>
 
 <button id="inv" class="alt" style="display:none">
 COPY INVITE LINK
@@ -117,28 +122,9 @@ let room = '';
 
 let reconnectingToInvite = false;
 let joinListenerRegistered = false;
+let pendingHomeInvite = false;
+let joining = false;
 
-// Generate CrazyGames invitation URL.
-async function inviteLink() {
-  try {
-    if (CG && CG.game &&
-        typeof CG.game.inviteLink === 'function') {
-
-      return await CG.game.inviteLink({
-        roomId: String(room)
-      });
-    }
-  } catch(e) {
-    console.error('[CrazyGames] Invite link error:', e);
-  }
-
-  return location.origin +
-    location.pathname +
-    '?roomId=' +
-    encodeURIComponent(room);
-}
-
-// Update CrazyGames multiplayer room information.
 function updateCrazyGamesRoom() {
   try {
     if (!CG || !CG.game || !room) return;
@@ -158,12 +144,29 @@ function updateCrazyGamesRoom() {
   }
 }
 
-// Register the CrazyGames invitation listener.
+async function inviteLink() {
+  try {
+    if (CG && CG.game &&
+        typeof CG.game.inviteLink === 'function') {
+
+      return await CG.game.inviteLink({
+        roomId: String(room)
+      });
+    }
+  } catch(e) {
+    console.error('[CrazyGames] Invite link error:', e);
+  }
+
+  return location.origin +
+    location.pathname +
+    '?roomId=' +
+    encodeURIComponent(room);
+}
+
 function registerCrazyGamesJoinListener() {
   try {
     if (!CG || !CG.game ||
         typeof CG.game.addJoinRoomListener !== 'function') {
-      console.warn('[CrazyGames] Join listener unavailable');
       return;
     }
 
@@ -171,20 +174,18 @@ function registerCrazyGamesJoinListener() {
 
     joinListenerRegistered = true;
 
-    CG.game.addJoinRoomListener((params) => {
+    CG.game.addJoinRoomListener(params => {
 
       const nextRoom = params &&
         (params.roomId || params.room);
 
-      if (!nextRoom) {
-        console.warn('[CrazyGames] Invitation received without room ID');
-        return;
-      }
+      if (!nextRoom) return;
 
       console.log('[CrazyGames] Invitation received:', nextRoom);
 
       inviteRoom = String(nextRoom);
       room = '';
+      joining = false;
 
       if (ws && ws.readyState !== WebSocket.CLOSED) {
         reconnectingToInvite = true;
@@ -199,6 +200,44 @@ function registerCrazyGamesJoinListener() {
   } catch(e) {
     console.error('[CrazyGames] Join listener error:', e);
   }
+}
+
+async function copyInviteLink(button) {
+  if (!room) {
+    throw new Error('You are not in a multiplayer room yet.');
+  }
+
+  const link = await inviteLink();
+
+  if (!link) {
+    throw new Error('Invite link unavailable.');
+  }
+
+  if (navigator.clipboard && window.isSecureContext) {
+    await navigator.clipboard.writeText(link);
+  } else {
+    const temp = document.createElement('textarea');
+    temp.value = link;
+    temp.style.position = 'fixed';
+    temp.style.opacity = '0';
+    document.body.appendChild(temp);
+    temp.select();
+
+    const copied = document.execCommand('copy');
+    temp.remove();
+
+    if (!copied) {
+      throw new Error('Clipboard access unavailable.');
+    }
+  }
+
+  button.textContent = 'INVITE LINK COPIED!';
+
+  setTimeout(() => {
+    button.textContent = button.id === 'homeInvite'
+      ? 'INVITE FRIENDS'
+      : 'COPY INVITE LINK';
+  }, 2000);
 }
 
 // =====================================================
@@ -291,22 +330,27 @@ function menu(show,text) {
 
 function play() {
 
+  if (joining) return;
+
   const name = $('nm').value.trim() || 'Player';
 
   const go = () => {
     tx({
-      t: 'join',
+      t:'join',
       name,
-      room: room || inviteRoom
+      room:room || inviteRoom
     });
   };
 
   if (ws && ws.readyState === WebSocket.OPEN) {
     go();
+    joining = true;
     return;
   }
 
   menu(true,'Connecting…');
+
+  joining = true;
 
   ws = new WebSocket(WS_URL);
 
@@ -333,13 +377,16 @@ function play() {
 
     gp(0);
     ws = null;
+    joining = false;
 
     if (reconnectingToInvite) {
       reconnectingToInvite = false;
-
-      // Connect again using the newly received invitation room.
       play();
       return;
+    }
+
+    if (pendingHomeInvite) {
+      pendingHomeInvite = false;
     }
 
     try {
@@ -365,8 +412,8 @@ function onMsg(m) {
 
     me = m.id;
     room = m.room;
-
     inviteRoom = '';
+    joining = false;
 
     own = b64(m.own);
     trl = b64(m.trl);
@@ -386,6 +433,16 @@ function onMsg(m) {
 
     console.log('[Game] Joined room:',room);
 
+    // Complete a home-page invite request after receiving room ID.
+    if (pendingHomeInvite) {
+      pendingHomeInvite = false;
+
+      copyInviteLink($('homeInvite')).catch(e => {
+        console.error('[Home invite]',e);
+        $('homeInvite').textContent = 'INVITE LINK UNAVAILABLE';
+      });
+    }
+
   } else if (m.t === 's') {
 
     snap(m);
@@ -393,6 +450,7 @@ function onMsg(m) {
   } else if (m.t === 'dead') {
 
     gp(0);
+    joining = false;
 
     try {
       if (CG && CG.game && CG.game.leftRoom) {
@@ -411,6 +469,8 @@ function onMsg(m) {
 
   } else if (m.t === 'full') {
 
+    joining = false;
+    pendingHomeInvite = false;
     menu(true,'Room full — try again');
 
   }
@@ -581,42 +641,59 @@ $('go').onclick = () => {
 
 };
 
+// Home-page invite button.
+$('homeInvite').onclick = async () => {
+
+  const btn = $('homeInvite');
+
+  try {
+
+    if (room) {
+      await copyInviteLink(btn);
+      return;
+    }
+
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      pendingHomeInvite = true;
+      btn.textContent = 'PREPARING INVITE...';
+      return;
+    }
+
+    pendingHomeInvite = true;
+    btn.textContent = 'CREATING ROOM...';
+
+    play();
+
+  } catch(e) {
+
+    console.error('[Home invite]',e);
+
+    btn.textContent = 'INVITE LINK UNAVAILABLE';
+
+    setTimeout(() => {
+      btn.textContent = 'INVITE FRIENDS';
+    },2000);
+
+  }
+};
+
+// In-game invite button.
 $('inv').onclick = async () => {
 
   const btn = $('inv');
 
   try {
-
-    if (!room) {
-      throw new Error('You are not in a multiplayer room yet.');
-    }
-
-    const link = await inviteLink();
-
-    if (!link) {
-      throw new Error('CrazyGames did not return an invite link.');
-    }
-
-    await navigator.clipboard.writeText(link);
-
-    btn.textContent = 'INVITE LINK COPIED!';
-
-    setTimeout(() => {
-      btn.textContent = 'COPY INVITE LINK';
-    },1800);
-
+    await copyInviteLink(btn);
   } catch(e) {
 
-    console.error('[Invite] Error:',e);
+    console.error('[Invite]',e);
 
     btn.textContent = 'COULD NOT COPY LINK';
 
     setTimeout(() => {
       btn.textContent = 'COPY INVITE LINK';
-    },1800);
-
+    },2000);
   }
-
 };
 
 // =====================================================
@@ -627,16 +704,27 @@ function draw(dt) {
 
   time += dt;
 
-  const k = 1-Math.exp(-dt/.08);
-  const kc = 1-Math.exp(-dt*14);
+  const k = 1-Math.exp(-dt/.18);
+  const kc = 1-Math.exp(-dt*12);
 
   for (const id in P) {
 
     const p = P[id];
-    const L = p.a ? .6 : 0;
 
-    p.vx += (p.x+p.dx*L-p.vx)*k;
-    p.vy += (p.y+p.dy*L-p.vy)*k;
+    if (!p.a) {
+      p.vx = p.x;
+      p.vy = p.y;
+      continue;
+    }
+
+    // constant-speed movement between server updates, gently corrected to the server position
+    const sp = (p.b ? 1.6 : 1) * (p.h ? 1 : .9) / STEP;
+
+    p.vx += p.dx*sp*dt;
+    p.vy += p.dy*sp*dt;
+
+    p.vx += (p.x+p.dx*.5-p.vx)*k;
+    p.vy += (p.y+p.dy*.5-p.vy)*k;
 
   }
 
@@ -732,7 +820,6 @@ function draw(dt) {
   g.textAlign = 'center';
   g.textBaseline = 'middle';
 
-  // Towers
   for (const t of towers) {
 
     const col = t.o ? COLORS[t.o-1] : '#8aa0c0';
@@ -799,7 +886,6 @@ function draw(dt) {
     }
   }
 
-  // Powerups
   for (const p of pu) {
 
     const cx = (p.x+.5)*T;
@@ -826,7 +912,6 @@ function draw(dt) {
     g.restore();
   }
 
-  // Players
   for (const id in P) {
 
     const p = P[id];
@@ -898,7 +983,6 @@ function draw(dt) {
     g.fillText(p.n,ex,ey-T*.9);
   }
 
-  // Popups
   for (const p of popups) {
 
     p.life -= dt;
@@ -915,7 +999,6 @@ function draw(dt) {
   g.globalAlpha = 1;
   g.restore();
 
-  // Minimap
   if (frame++%6 === 0) {
 
     const im = mg.createImageData(N,N);
@@ -973,7 +1056,6 @@ function draw(dt) {
     );
   }
 
-  // HUD
   hudT += dt;
 
   if (hudT > .4 && mp) {
@@ -1044,7 +1126,6 @@ function loop(n) {
         CG.game.loadingStart();
       }
 
-      // Read invitation room AFTER SDK initialisation.
       const sdkRoom = CG.game.getInviteParam
         ? CG.game.getInviteParam('roomId')
         : null;
@@ -1055,7 +1136,6 @@ function loop(n) {
         QS.get('room') ||
         '';
 
-      // Register invitation listener.
       registerCrazyGamesJoinListener();
 
       console.log('[CrazyGames] SDK initialised');
@@ -1081,7 +1161,6 @@ function loop(n) {
 
   } catch(e) {}
 
-  // Auto-join invited rooms or Instant Multiplayer sessions.
   if (
     inviteRoom ||
     (CG && CG.game && CG.game.isInstantMultiplayer)
