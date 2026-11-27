@@ -60,6 +60,7 @@ COPY INVITE LINK
 
 <div class="help">
 Arrows / WASD or swipe to move.<br>
+Press the opposite way to stop. Then go any way except back onto your trail.<br>
 Leave your zone, loop back to claim land.<br>
 Cross a trail to cut it — the cut races to the owner’s head. Hit your own trail and it cuts you too.<br>
 <b style="color:#ffd400">»</b> speed &nbsp;
@@ -596,6 +597,7 @@ function snap(m) {
       r:e.r,
       n:e.n,
       h:e.h,
+      z:e.z,
       c:COLORS[e.i-1]
     });
   }
@@ -1040,6 +1042,14 @@ function draw(dt) {
       g.stroke();
 
       g.globalAlpha = 1;
+    }
+
+    if (p.z) {
+
+      // paused: two small bars on the head
+      g.fillStyle = '#05060c';
+      g.fillRect(ex-4,ey-5,3,10);
+      g.fillRect(ex+1,ey-5,3,10);
     }
 
     g.font = '600 11px system-ui';

@@ -169,6 +169,7 @@ function Game(code, onEmpty) {
       q: null,
       fuse: null,
       fuseAcc: 0,
+      stopped: false,
       home: { x, y }
     });
   }
@@ -612,6 +613,11 @@ function Game(code, onEmpty) {
         if (!e.alive) continue;
       }
 
+      if (e.stopped) {
+        e.acc = 0;
+        continue;
+      }
+
       e.acc += dt * (e.boost > 0 ? 1.6 : 1) * (e.bot ? .9 : 1);
 
       while (e.acc >= STEP && e.alive) {
@@ -714,7 +720,8 @@ function Game(code, onEmpty) {
         k: e.kills,
         r: Math.round(e.area * 10),
         n: e.name,
-        h: e.ws ? 1 : 0
+        h: e.ws ? 1 : 0,
+        z: e.stopped ? 1 : 0
       })),
 
       d,
@@ -886,9 +893,36 @@ function Game(code, onEmpty) {
 
 
     dir(e, d) {
-      if (e.alive && d >= 0 && d < 4) {
-        e.q = d | 0;
+      if (!e.alive || !(d >= 0 && d < 4)) return;
+
+      d = d | 0;
+      const nd = D[d];
+
+      // stopped: go any way except back onto your own trail
+      if (e.stopped) {
+        const x = e.x + nd[0];
+        const y = e.y + nd[1];
+
+        if (x >= 0 && y >= 0 && x < N && y < N && trl[ix(x, y)] === e.id) {
+          return;
+        }
+
+        e.dx = nd[0];
+        e.dy = nd[1];
+        e.q = null;
+        e.stopped = false;
+        e.acc = STEP;
+        return;
       }
+
+      // moving: pressing the opposite direction stops you in place
+      if (nd[0] === -e.dx && nd[1] === -e.dy) {
+        e.stopped = true;
+        e.q = null;
+        return;
+      }
+
+      e.q = d;
     },
 
 
