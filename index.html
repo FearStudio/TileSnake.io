@@ -1101,13 +1101,17 @@ let last = performance.now();
 
 function loop(n) {
 
+  requestAnimationFrame(loop);
+
   const dt = Math.min(.05,(n-last)/1000);
 
   last = n;
 
-  draw(dt);
-
-  requestAnimationFrame(loop);
+  try {
+    draw(dt);
+  } catch(e) {
+    console.error('[Render] draw error:',e);
+  }
 }
 
 // =====================================================
@@ -1116,11 +1120,17 @@ function loop(n) {
 
 (async () => {
 
+  // start drawing immediately so a slow SDK can never leave the screen black
+  requestAnimationFrame(loop);
+
   try {
 
     if (CG) {
 
-      await CG.init();
+      await Promise.race([
+        CG.init(),
+        new Promise((_,rej) => setTimeout(() => rej(new Error('SDK init timeout')),4000))
+      ]);
 
       if (CG.game.loadingStart) {
         CG.game.loadingStart();
@@ -1150,8 +1160,6 @@ function loop(n) {
     inviteRoom = QS.get('roomId') || QS.get('room') || '';
 
   }
-
-  requestAnimationFrame(loop);
 
   try {
 
