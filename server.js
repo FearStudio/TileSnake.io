@@ -15,10 +15,29 @@ const COLORS = [
   '#4dffd2', '#e0e0ff', '#ffa6ff', '#a6ff00'
 ];
 
-const BOTS = [
-  'Byte', 'Nova', 'Glitch', 'Pixel', 'Vortex', 'Rogue',
-  'Echo', 'Static', 'Bolt', 'Zap', 'Flux', 'Hex'
+const BOT_NAMES = [
+  'SilentRogue', 'DripPhantom', 'XenoRush', 'Blvckout', 'ToxicOrbit',
+  'LunarFlex', 'GrimPulse', 'ZeroMercy', 'RiftKing', 'ShadowVex',
+  'PixelReaper', 'TurboGhost', 'NightShift', 'VenomSync', 'ChaosBloom',
+  'FrostVandal', 'WraithMode', 'GhostTheory', 'AimlessGod', 'NovaStrike',
+  'DeadSilence', 'SavageCircuit', 'CrypticSoul', 'RageTheory', 'EchoSlayer',
+  'NeonWraith', 'PhantomDrift', 'VortexX', 'NoScopeNoodle', 'LagLegend',
+  'CerealKiller', 'SneakyGoblin', 'WiFiWarrior', 'BonkMaster', 'LootGremlin',
+  'PotatoAim', 'RespawnEnjoyer', 'YeetProtocol', 'ChaosPenguin', 'CrayonBandit',
+  'SirCampALot', 'UnpaidNPC', 'CtrlAltDefeat', 'PixelPanic', 'SweatyTurtle',
+  'AimBotAdjacent', 'MidnightMango', 'KeyboardGoblin', 'ClutchOrKick',
+  'ProbablyAFK', 'SpawnSniper', 'TouchGrassLater', 'SkillIssueEnjoyer',
+  'BigLagEnergy', 'ButtonMasher', 'DoomScroll', 'TinyTerror', 'GGNoRe'
 ];
+
+function randomBotNames(count) {
+  const names = [...BOT_NAMES];
+  for (let i = names.length - 1; i > 0; i--) {
+    const j = Math.random() * (i + 1) | 0;
+    [names[i], names[j]] = [names[j], names[i]];
+  }
+  return names.slice(0, count);
+}
 
 const ix = (x, y) => y * N + x;
 
@@ -115,7 +134,9 @@ function Game(code, onEmpty) {
     };
   }
 
+  const lobbyBotNames = randomBotNames(SLOTS);
   ents = Array.from({ length: SLOTS }, (_, i) => mk(i + 1));
+  ents.forEach((e, i) => { e.name = lobbyBotNames[i]; });
 
 
   function spawn(e) {
@@ -1267,7 +1288,9 @@ function Game(code, onEmpty) {
       e.ws = null;
       e.bot = true;
       e.hold = Date.now() + 60000;
-      e.name = BOTS[e.id - 1];
+      const used = new Set(ents.filter(x => x !== e).map(x => x.name));
+      const available = BOT_NAMES.filter(n => !used.has(n));
+      e.name = available[Math.random() * available.length | 0] || ('Player' + e.id);
 
       if (!e.alive) {
         e.respawn = 3;

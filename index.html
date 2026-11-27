@@ -1127,8 +1127,9 @@ function draw(dt) {
     mg.putImageData(im,0,0);
   }
 
-  const ms = 110;
-  const mx = W-ms-10;
+  // Larger minimap, scaled for smaller screens but capped on desktop.
+  const ms = Math.min(190, Math.max(145, Math.round(Math.min(W,H)*.25)));
+  const mx = W-ms-12;
   const my = H-ms-18;
 
   g.fillStyle = 'rgba(10,14,30,.78)';
