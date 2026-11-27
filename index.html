@@ -40,13 +40,9 @@ button:disabled{opacity:.55;cursor:wait}
 .toggle{display:flex;align-items:center;justify-content:space-between;margin:14px 0}
 .toggle input[type=checkbox]{width:auto;margin:0;flex:0 0 auto}
 .closeSettings{margin-top:10px;width:100%}
-#st{transform:scale(var(--hud-scale));transform-origin:top left}
 #lb{transform:scale(var(--hud-scale));transform-origin:top right}
 #feed{transform:scale(var(--hud-scale));transform-origin:top left}
-/* Keep every on-screen interface panel at the selected UI scale. */
-#card{transform:scale(var(--hud-scale))}
-#settingsCard{transform:scale(var(--hud-scale))}
-#settingsTab{transform:scale(var(--hud-scale));transform-origin:bottom left}
+/* UI size applies only to leaderboard and kill feed. Settings and menu stay fixed. */
 #menu{z-index:10}
 </style>
 </head>
@@ -76,8 +72,6 @@ Kills <span id="kl">0</span> · Best <span id="bst">0%</span>
       <div class="settingRow"><label for="miniMapSize">Mini map size</label><span class="settingValue" id="miniMapSizeValue">100%</span></div>
       <input id="miniMapSize" type="range" min="70" max="140" step="5" value="100">
     </div>
-    <div class="toggle"><label for="showFeed">Kill feed</label><input id="showFeed" type="checkbox" checked></div>
-    <div class="toggle"><label for="showLeaderboard">Leaderboard</label><input id="showLeaderboard" type="checkbox" checked></div>
     <button id="closeSettings" class="alt closeSettings">CLOSE</button>
   </div>
 </div>
@@ -299,23 +293,19 @@ const rgb = COLORS.map(c => [
 
 const $ = id => document.getElementById(id);
 
-const settings = {uiSize:120, miniMapSize:120, showFeed:true, showLeaderboard:true};
+const settings = {uiSize:100, miniMapSize:100};
 function loadSettings(){
   try{Object.assign(settings,JSON.parse(localStorage.getItem('tilerush_settings')||'{}'));}catch(e){}
-  // Start at 120% even if an older saved preference used a smaller size.
-  settings.uiSize=120;
-  settings.miniMapSize=120;
+  settings.uiSize=Math.min(140,Math.max(75,Number(settings.uiSize)||100));
+  settings.miniMapSize=Math.min(140,Math.max(70,Number(settings.miniMapSize)||100));
 }
 function saveSettings(){try{localStorage.setItem('tilerush_settings',JSON.stringify(settings));}catch(e){}}
 function applySettings(){
   const scale=settings.uiSize/100;
   document.documentElement.style.setProperty('--hud-scale',scale);
-  $('feed').style.display=settings.showFeed?'block':'none';
-  $('lb').style.display=settings.showLeaderboard?'block':'none';
   $('uiSizeValue').textContent=settings.uiSize+'%';
   $('miniMapSizeValue').textContent=settings.miniMapSize+'%';
   $('uiSize').value=settings.uiSize; $('miniMapSize').value=settings.miniMapSize;
-  $('showFeed').checked=settings.showFeed; $('showLeaderboard').checked=settings.showLeaderboard;
 }
 function openSettings(){$('settings').style.display='flex';applySettings();}
 function closeSettings(){$('settings').style.display='none';}
@@ -785,8 +775,6 @@ $('closeSettings').onclick=closeSettings;
 $('settings').addEventListener('click',e=>{if(e.target===$('settings'))closeSettings();});
 $('uiSize').oninput=e=>{settings.uiSize=+e.target.value;saveSettings();applySettings();};
 $('miniMapSize').oninput=e=>{settings.miniMapSize=+e.target.value;saveSettings();applySettings();};
-$('showFeed').onchange=e=>{settings.showFeed=e.target.checked;saveSettings();applySettings();};
-$('showLeaderboard').onchange=e=>{settings.showLeaderboard=e.target.checked;saveSettings();applySettings();};
 applySettings();
 
 // =====================================================
