@@ -771,7 +771,7 @@ function Game(code, onEmpty) {
 
     emptyTimer = setTimeout(() => {
       if (!humans()) onEmpty(code);
-    }, 60000);
+    }, 600000);
   }
 
 
@@ -781,24 +781,60 @@ function Game(code, onEmpty) {
 
     open: () => ents.some(e => e.bot),
 
-    join(ws, name) {
-      const e =
-        ents.find(x => x.bot && !x.alive) ||
-        ents.find(x => x.bot);
+    join(ws, name, sid) {
+      sid = typeof sid === 'string' && /^[\w-]{8,40}$/.test(sid) ? sid : '';
+
+      let e = null;
+
+      // 1) Same player coming back (reload / dropped connection): give their slot back.
+      if (sid) {
+        e = ents.find(x => x.sid === sid && (x.bot || x.ws));
+
+        if (e && e.ws && e.ws !== ws) {
+          // opened in a second tab: move them over and tell the old tab
+          const old = e.ws;
+          old.ent = null;
+          old.game = null;
+          send(old, { t: 'kicked' });
+          try { old.close(); } catch (err) {}
+          e.ws = null;
+        }
+      }
+
+      const reclaimed = !!e;
+
+      // 2) Someone new: take over a bot (slots held for a recent leaver go last).
+      if (!e) {
+        const now = Date.now();
+
+        e =
+          ents.find(x => x.bot && !x.alive && !(x.hold > now)) ||
+          ents.find(x => x.bot && !(x.hold > now)) ||
+          ents.find(x => x.bot && !x.alive) ||
+          ents.find(x => x.bot);
+      }
 
       if (!e) return false;
 
-      if (e.alive) {
+      if (!reclaimed && e.alive) {
         clear(e);
       }
 
       e.bot = false;
       e.ws = ws;
+      e.sid = sid;
+      e.hold = 0;
+      e.q = null;
       e.name = clean(name);
-      e.kills = 0;
-      e.area = 0;
 
-      spawn(e);
+      if (!reclaimed) {
+        e.kills = 0;
+        e.area = 0;
+        spawn(e);
+      } else if (!e.alive) {
+        e.kills = 0;
+        spawn(e);
+      }
 
       ws.ent = e;
       ws.game = this;
@@ -862,6 +898,7 @@ function Game(code, onEmpty) {
 
       e.ws = null;
       e.bot = true;
+      e.hold = Date.now() + 60000;
       e.name = BOTS[e.id - 1];
 
       if (!e.alive) {
@@ -885,16 +922,21 @@ let pc = 0;
 const drop = c => rooms.delete(c);
 
 
-function pick(code) {
+function pick(code, rejoin) {
   if (code && /^[A-Za-z0-9_-]{1,16}$/.test(code)) {
     let g = rooms.get(code);
 
     if (!g) {
+      // coming back to a lobby that no longer exists: go to a public lobby instead
+      if (rejoin) return pick('');
+
       g = Game(code, drop);
       rooms.set(code, g);
     }
 
-    return g.open() ? g : null;
+    if (g.open()) return g;
+
+    return rejoin ? pick('') : null;
   }
 
   for (const g of rooms.values()) {
@@ -938,9 +980,9 @@ wss.on('connection', ws => {
         return;
       }
 
-      const g = pick(m.room);
+      const g = pick(m.room, m.rejoin === true);
 
-      if (!g || !g.join(ws, m.name)) {
+      if (!g || !g.join(ws, m.name, m.sid)) {
         send(ws, { t: 'full' });
       }
 

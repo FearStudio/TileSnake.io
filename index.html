@@ -322,6 +322,30 @@ function menu(show,text) {
   }
 }
 
+// ---- rejoin support: stable player id + last lobby ----
+function getSid() {
+  try {
+    let v = localStorage.getItem('tilerush_sid');
+    if (!v) {
+      v = (window.crypto && crypto.randomUUID)
+        ? crypto.randomUUID()
+        : Math.random().toString(36).slice(2) + Date.now().toString(36);
+      localStorage.setItem('tilerush_sid',v);
+    }
+    return v;
+  } catch(e) {
+    return window.__sid || (window.__sid = Math.random().toString(36).slice(2) + Date.now().toString(36));
+  }
+}
+const savedRoom = () => { try { return localStorage.getItem('tilerush_room') || ''; } catch(e) { return ''; } };
+const saveRoom  = r  => { try { localStorage.setItem('tilerush_room',r); } catch(e) {} };
+const clearSaved = () => { try { localStorage.removeItem('tilerush_room'); } catch(e) {} };
+
+let autoTries = 0;
+let reconnecting = false;
+let retriedFull = false;
+let kicked = false;
+
 function play() {
 
   if (joining) return;
@@ -329,10 +353,15 @@ function play() {
   const name = $('nm').value.trim() || 'Player';
 
   const go = () => {
+    const code = room || inviteRoom;
+    const saved = code ? '' : savedRoom();
+
     tx({
       t:'join',
       name,
-      room:room || inviteRoom
+      room:code || saved,
+      sid:getSid(),
+      rejoin:!!(room && !inviteRoom) || !!saved
     });
   };
 
@@ -383,6 +412,18 @@ function play() {
       pendingHomeInvite = false;
     }
 
+    // connection dropped: try to get back into the same lobby automatically
+    if ((opened || reconnecting) && room && !kicked && autoTries < 6) {
+      autoTries++;
+      reconnecting = true;
+      menu(true,'Reconnecting… (' + autoTries + '/6)');
+      setTimeout(play,700*autoTries);
+      return;
+    }
+
+    reconnecting = false;
+    autoTries = 0;
+
     try {
       if (CG && CG.game && CG.game.leftRoom) {
         CG.game.leftRoom();
@@ -408,6 +449,12 @@ function onMsg(m) {
     room = m.room;
     inviteRoom = '';
     joining = false;
+
+    autoTries = 0;
+    reconnecting = false;
+    retriedFull = false;
+    kicked = false;
+    saveRoom(room);
 
     own = b64(m.own);
     trl = b64(m.trl);
@@ -459,11 +506,31 @@ function onMsg(m) {
 
     $('go').textContent = 'PLAY AGAIN';
 
+  } else if (m.t === 'kicked') {
+
+    kicked = true;
+    menu(true,'This game was opened in another tab.<br>Press play to take it back.');
+
   } else if (m.t === 'full') {
 
     joining = false;
     pendingHomeInvite = false;
-    menu(true,'Room full — try again');
+
+    const hadRoom = !!(room || inviteRoom || savedRoom());
+
+    room = '';
+    inviteRoom = '';
+    clearSaved();
+
+    // that lobby is full: drop into a new one automatically (once)
+    if (hadRoom && !retriedFull) {
+      retriedFull = true;
+      play();
+      return;
+    }
+
+    retriedFull = false;
+    menu(true,'No free lobby slots — try again');
 
   }
 }
