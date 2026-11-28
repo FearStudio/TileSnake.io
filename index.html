@@ -221,9 +221,21 @@ function startMusic(){
 const gameMusic=$('gameMusic');
 gameMusic.loop=true;
 gameMusic.volume=0;
-let gameMusicFade=1,gameMusicRAF=null,gameMusicOn=false;
+let gameMusicFade=1,gameMusicRAF=null,gameMusicOn=false,gameStillWanted=false;
+function musicNote(t){
+  const f=$('feed');if(!f)return;
+  const d=document.createElement('div');d.textContent=t;f.appendChild(d);
+  setTimeout(()=>d.remove(),8000);
+}
+let musicMissing=false;
+gameMusic.querySelector('source').addEventListener('error',()=>{musicMissing=true;});
 function setGameMusicVolume(){gameMusic.volume=Math.min(1,Math.max(0,(settings.musicVolume/100)*gameMusicFade));}
 function startGameMusic(){
+  gameStillWanted=true;
+  if(musicMissing){
+    setTimeout(()=>musicNote('Music file not found: Neon_Snake_Loop.mp3 (put it next to index.html)'),400);
+    return;
+  }
   if(gameMusicOn)return;
   gameMusicOn=true;
   gameMusicFade=0;
@@ -237,9 +249,25 @@ function startGameMusic(){
       setGameMusicVolume();
       if(gameMusicFade<1)gameMusicRAF=requestAnimationFrame(step);
     })(t0);
-  }).catch(e=>{gameMusicOn=false;console.log('[GameMusic] Blocked:',e);});
+  }).catch(e=>{
+    gameMusicOn=false;
+    console.log('[GameMusic] Blocked:',e);
+    if(e&&e.name==='NotAllowedError'){
+      // browser blocked autoplay: retry on the next click / key / tap
+      const retry=()=>{
+        document.removeEventListener('pointerdown',retry);
+        document.removeEventListener('keydown',retry);
+        if(gameStillWanted)startGameMusic();
+      };
+      document.addEventListener('pointerdown',retry);
+      document.addEventListener('keydown',retry);
+    }else{
+      musicNote('Music failed: '+(e&&e.name?e.name:'error')+' - check Neon_Snake_Loop.mp3 is next to index.html');
+    }
+  });
 }
 function stopGameMusic(){
+  gameStillWanted=false;
   gameMusicOn=false;
   if(gameMusicRAF!==null){cancelAnimationFrame(gameMusicRAF);gameMusicRAF=null;}
   gameMusic.pause();
