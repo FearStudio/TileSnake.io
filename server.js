@@ -4,7 +4,7 @@
 const http = require('http');
 const { WebSocketServer } = require('ws');
 
-const N = 90, STEP = .12, SLOTS = 12, TICK = 40;
+const N = 100, STEP = .12, SLOTS = 12, TICK = 40;
 const TOWER_PULSE = 5;
 
 const D = [[0, -1], [1, 0], [0, 1], [-1, 0]];
