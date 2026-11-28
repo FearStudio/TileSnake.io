@@ -164,6 +164,7 @@ function Game(code, onEmpty) {
       aggr: .5,
       caution: .5,
       greed: .5,
+      amb: false,
       maxTrail: 30,
       plan: null,
       hadTrail: false
@@ -215,6 +216,9 @@ function Game(code, onEmpty) {
 
     const d = D[Math.random() * 4 | 0];
 
+    // ~45% of bot lives are "conquerors": big loops, low fear, full speed
+    const amb = e.bot && Math.random() < .45;
+
     Object.assign(e, {
       x,
       y,
@@ -232,9 +236,10 @@ function Game(code, onEmpty) {
       stopped: false,
       home: { x, y },
       // fresh bot personality each life
+      amb,
       aggr: .35 + Math.random() * .6,
-      caution: .3 + Math.random() * .6,
-      greed: Math.random(),
+      caution: amb ? .1 + Math.random() * .3 : .3 + Math.random() * .6,
+      greed: amb ? .6 + Math.random() * .4 : Math.random(),
       maxTrail: 30,
       plan: null,
       hadTrail: false
@@ -531,13 +536,13 @@ function Game(code, onEmpty) {
 
           if (o === e.id) continue;
 
-          gain += o ? 1.4 : 1;
+          gain += o ? 1.8 : 1;
         }
       }
 
       const cost = 2 * p.ext + p.W + 4 + .2 * k;
 
-      let s = gain / cost + bonus;
+      let s = gain / cost + bonus + (e.amb ? gain / 350 : 0);
 
       for (const o of ents) {
         if (o === e || !o.alive) continue;
@@ -556,6 +561,10 @@ function Game(code, onEmpty) {
     let bestPlan = null;
     let bestScore = -Infinity;
 
+    // Loops scale up with territory so bots keep growing past 30%
+    const boost = Math.min(30, e.area * (e.amb ? 1.1 : .7));
+    const reach = e.amb ? 14 : 8;
+
     // Random rectangle candidates launched in each direction
     for (let mi = 0; mi < 4; mi++) {
       const m = D[mi];
@@ -569,8 +578,8 @@ function Game(code, onEmpty) {
         const l = [l0[0] * sgn, l0[1] * sgn];
 
         for (let t = 0; t < 2; t++) {
-          const ext = 3 + (Math.random() * (8 + 10 * e.greed) | 0);
-          const W = 4 + (Math.random() * (5 + 8 * e.greed) | 0);
+          const ext = 3 + (Math.random() * (reach + 10 * e.greed + boost) | 0);
+          const W = 4 + (Math.random() * (reach - 3 + 8 * e.greed + boost) | 0);
           const p = build(m, l, k + ext, W, 0, ext);
           const s = score(p, 0, k);
 
@@ -668,7 +677,7 @@ function Game(code, onEmpty) {
 
     const home = inside
       ? { dir: -1, dist: 0 }
-      : bfsHome(e, 1800);
+      : bfsHome(e, 4000);
 
     let goal = null;
     let goHome = false;
@@ -680,7 +689,12 @@ function Game(code, onEmpty) {
       } else {
         const th = threat(e);
 
-        if (th <= 3 + ((e.caution * 5) | 0)) {
+        const panic = Math.max(
+          1,
+          3 + ((e.caution * 5) | 0) - (e.shield > 0 ? 2 : 0) - (e.amb ? 1 : 0)
+        );
+
+        if (th <= panic) {
           goHome = true;
         } else if (e.trail.length >= e.maxTrail) {
           goHome = true;
@@ -691,7 +705,10 @@ function Game(code, onEmpty) {
     if (!goHome) {
       // 2) Hunt: cut nearby enemy trails
       const prey = e.aggr > .3
-        ? findPrey(e, 10 + ((e.aggr * 14) | 0))
+        ? findPrey(
+            e,
+            e.amb ? 4 + ((e.aggr * 5) | 0) : 10 + ((e.aggr * 14) | 0)
+          )
         : null;
 
       if (
@@ -706,7 +723,7 @@ function Game(code, onEmpty) {
       // 3) Grab nearby power-ups
       if (!goal) {
         let pb = null;
-        let pd = 10;
+        let pd = e.amb ? 6 : 10;
 
         for (const p of pu) {
           if (p.type === 1 && e.shield > 0) continue;
@@ -735,7 +752,7 @@ function Game(code, onEmpty) {
         }
 
         if (e.plan) {
-          if (++e.plan.age > 220) {
+          if (++e.plan.age > 450) {
             e.plan = null;
             if (!inside) goHome = true;
           } else {
@@ -1149,7 +1166,7 @@ function Game(code, onEmpty) {
         continue;
       }
 
-      e.acc += dt * (e.boost > 0 ? 1.6 : 1) * (e.bot ? .9 : 1);
+      e.acc += dt * (e.boost > 0 ? 1.6 : 1) * (e.bot ? (e.amb ? 1 : .9) : 1);
 
       while (e.acc >= STEP && e.alive) {
         e.acc -= STEP;
