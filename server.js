@@ -2,7 +2,7 @@
 // Run: npm i && node server.js
 
 const http = require('http');
-const ws = new WebSocket("https://tilesnake-io.onrender.com/");
+const { WebSocketServer } = require('ws');
 
 const N = 90, STEP = .12, SLOTS = 12, TICK = 40;
 const TOWER_PULSE = 5;
