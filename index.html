@@ -319,9 +319,14 @@ function killMenuMusic(){
 introMusic.addEventListener('play',()=>{if(musicStopRequested)killMenuMusic();});
 
 function loadSettings(){
+  let savedVersion=0;
   try{
-    Object.assign(settings,JSON.parse(localStorage.getItem('tilerush_settings')||'{}'));
+    const saved=JSON.parse(localStorage.getItem('tilerush_settings')||'{}');
+    savedVersion=saved.settingsVersion||0;
+    Object.assign(settings,saved);
   }catch(e){}
+  // one-time reset so all music starts at the 9% default
+  if(savedVersion<2){settings.musicVolume=9;settings.settingsVersion=2;saveSettings();}
   settings.uiSize=Math.min(140,Math.max(75,Number(settings.uiSize)||100));
   settings.miniMapSize=Math.min(140,Math.max(70,Number(settings.miniMapSize)||100));
   const savedMusicVolume=Number(settings.musicVolume);
@@ -413,6 +418,7 @@ function play(){
     }
     reconnecting=false;autoTries=0;
     try{if(CG&&CG.game&&CG.game.leftRoom)CG.game.leftRoom();}catch(e){}
+    stopGameMusic();
     menu(true,opened?'Disconnected — press play to reconnect':'Can’t reach the server at<br>'+WS_URL+'<br>Is it running?');
   };
 }
@@ -431,12 +437,12 @@ function onMsg(m){
     menu(true,'<b style="color:#ff2e88;font-size:20px">ELIMINATED</b>'+(m.by?' by '+m.by:'')+'<br>Territory '+m.area.toFixed(1)+'% · Kills '+m.kills);
     $('go').textContent='PLAY AGAIN';
   }else if(m.t==='kicked'){
-    kicked=true;menu(true,'This game was opened in another tab.<br>Press play to take it back.');
+    kicked=true;stopGameMusic();menu(true,'This game was opened in another tab.<br>Press play to take it back.');
   }else if(m.t==='full'){
     joining=false;pendingHomeInvite=false;
     const hadRoom=!!(room||inviteRoom||savedRoom());room='';inviteRoom='';clearSaved();
     if(hadRoom&&!retriedFull){retriedFull=true;play();return;}
-    retriedFull=false;menu(true,'No free lobby slots — try again');
+    retriedFull=false;stopGameMusic();menu(true,'No free lobby slots — try again');
   }
 }
 
@@ -511,7 +517,7 @@ applySettings();
 $('go').onclick=()=>{
   fadeOutMenuMusic();
   if($('go').textContent==='PLAY AGAIN'&&ws)showAd(play);
-  else play();
+  else{startGameMusic();play();}
 };
 
 $('homeInvite').onclick=async()=>{
