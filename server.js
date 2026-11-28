@@ -70,6 +70,13 @@ function Game(code, onEmpty) {
   const trl = new Int8Array(N * N);
   const dirty = new Set();
 
+  // Scratch buffers for bot pathfinding (BFS)
+  const bfsSeen = new Int32Array(N * N);
+  const bfsFirst = new Int8Array(N * N);
+  const bfsDist = new Int16Array(N * N);
+  const bfsQ = new Int32Array(N * N);
+  let bfsStamp = 0;
+
   const so = (i, v) => {
     if (own[i] !== v) {
       own[i] = v;
@@ -152,7 +159,14 @@ function Game(code, onEmpty) {
       x: 0,
       y: 0,
       dx: 1,
-      dy: 0
+      dy: 0,
+      // bot brain
+      aggr: .5,
+      caution: .5,
+      greed: .5,
+      maxTrail: 30,
+      plan: null,
+      hadTrail: false
     };
   }
 
@@ -216,7 +230,14 @@ function Game(code, onEmpty) {
       fuse: null,
       fuseAcc: 0,
       stopped: false,
-      home: { x, y }
+      home: { x, y },
+      // fresh bot personality each life
+      aggr: .35 + Math.random() * .6,
+      caution: .3 + Math.random() * .6,
+      greed: Math.random(),
+      maxTrail: 30,
+      plan: null,
+      hadTrail: false
     });
   }
 
@@ -245,62 +266,523 @@ function Game(code, onEmpty) {
     return trl[ix(x, y)] === e.id;
   }
 
-  // Bot AI
-  function ai(e) {
-    const inside = own[ix(e.x, e.y)] === e.id;
+  // ====== BOT AI ======
 
-    if (inside) {
-      if (!e.trail.length) {
-        e.out = 0;
-        e.limit = 6 + (Math.random() * 16 | 0);
-      }
-    } else {
-      e.out++;
+  // Shortest path (avoiding own trail + walls) back to own territory.
+  // Returns { dir: first step direction index or -1, dist: steps }.
+  function bfsHome(e, limit) {
+    const start = ix(e.x, e.y);
+
+    if (own[start] === e.id) {
+      return { dir: -1, dist: 0 };
     }
 
-    const c = [
+    bfsStamp++;
+
+    let qh = 0;
+    let qt = 0;
+
+    bfsSeen[start] = bfsStamp;
+    bfsDist[start] = 0;
+    bfsQ[qt++] = start;
+
+    while (qh < qt && qt < limit) {
+      const i = bfsQ[qh++];
+      const x = i % N;
+      const y = i / N | 0;
+
+      for (let d = 0; d < 4; d++) {
+        const nx = x + D[d][0];
+        const ny = y + D[d][1];
+
+        if (nx < 0 || ny < 0 || nx >= N || ny >= N) continue;
+
+        const j = ix(nx, ny);
+
+        if (bfsSeen[j] === bfsStamp) continue;
+        if (trl[j] === e.id) continue;
+
+        if (
+          i === start &&
+          D[d][0] === -e.dx &&
+          D[d][1] === -e.dy
+        ) {
+          continue;
+        }
+
+        bfsSeen[j] = bfsStamp;
+        bfsDist[j] = bfsDist[i] + 1;
+        bfsFirst[j] = i === start ? d : bfsFirst[i];
+
+        if (own[j] === e.id) {
+          return { dir: bfsFirst[j], dist: bfsDist[j] };
+        }
+
+        bfsQ[qt++] = j;
+      }
+    }
+
+    return { dir: -1, dist: 999 };
+  }
+
+  // Distance from the nearest living enemy head to any of our trail cells.
+  function threat(e) {
+    if (!e.trail.length) return 99;
+
+    let best = 99;
+
+    for (const o of ents) {
+      if (o === e || !o.alive || o.stopped) continue;
+
+      if (Math.abs(o.x - e.x) + Math.abs(o.y - e.y) > 45) continue;
+
+      for (let k = 0; k < e.trail.length; k++) {
+        const c = e.trail[k];
+        const d = Math.abs(o.x - c % N) + Math.abs(o.y - (c / N | 0));
+
+        if (d < best) best = d;
+      }
+
+      const dh = Math.abs(o.x - e.x) + Math.abs(o.y - e.y);
+
+      if (dh < best) best = dh;
+    }
+
+    return best;
+  }
+
+  // Nearest enemy trail cell worth cutting (prefers cells near their head).
+  function findPrey(e, range) {
+    let best = null;
+    let bs = range + 1;
+
+    for (const o of ents) {
+      if (o === e || !o.alive || !o.trail.length || o.shield > 0) continue;
+
+      const len = o.trail.length;
+
+      for (let k = 0; k < len; k++) {
+        const c = o.trail[k];
+        const cx = c % N;
+        const cy = c / N | 0;
+        const d = Math.abs(cx - e.x) + Math.abs(cy - e.y);
+        const s = d - 3 * (k / len);
+
+        if (d <= range && s < bs) {
+          bs = s;
+          best = { x: cx, y: cy, d };
+        }
+      }
+    }
+
+    return best;
+  }
+
+  // Penalty for stepping into dead ends / hugging walls.
+  function trapPenalty(e, x, y, d) {
+    let free = 0;
+
+    for (const nd of D) {
+      if (nd[0] === -d[0] && nd[1] === -d[1]) continue;
+
+      const nx = x + nd[0];
+      const ny = y + nd[1];
+
+      if (nx < 0 || ny < 0 || nx >= N || ny >= N) continue;
+      if (trl[ix(nx, ny)] === e.id) continue;
+
+      free++;
+    }
+
+    let p = free === 0 ? 60 : free === 1 ? 1.2 : 0;
+
+    if (x === 0 || y === 0 || x === N - 1 || y === N - 1) {
+      p += .6;
+    }
+
+    return p;
+  }
+
+  // Greedy safe step toward a goal. Grabs enemy trail cells opportunistically.
+  function pickDir(e, goal) {
+    const cand = [
       [e.dx, e.dy],
       [-e.dy, e.dx],
       [e.dy, -e.dx]
     ];
 
-    let want = null;
+    if (!e.trail.length) {
+      cand.push([-e.dx, -e.dy]);
+    }
 
-    if (!inside && e.out > e.limit) {
-      const hx = e.home.x - e.x;
-      const hy = e.home.y - e.y;
+    let best = null;
+    let bs = Infinity;
 
-      const hd = Math.abs(hx) > Math.abs(hy)
-        ? [Math.sign(hx), 0]
-        : [0, Math.sign(hy)];
+    for (const d of cand) {
+      const x = e.x + d[0];
+      const y = e.y + d[1];
+
+      if (x < 0 || y < 0 || x >= N || y >= N) continue;
+
+      const i = ix(x, y);
+
+      if (trl[i] === e.id) continue;
+
+      let s = Math.abs(goal.x - x) + Math.abs(goal.y - y);
+
+      if (d[0] === e.dx && d[1] === e.dy) {
+        s -= .3;
+      } else if (d[0] === -e.dx && d[1] === -e.dy) {
+        s += .5;
+      }
+
+      const t = trl[i];
+
+      if (t && t !== e.id && ents[t - 1].shield <= 0) {
+        s -= 2 + 4 * e.aggr;
+      }
+
+      s += trapPenalty(e, x, y, d);
+      s += Math.random() * .2;
+
+      if (s < bs) {
+        bs = s;
+        best = d;
+      }
+    }
+
+    if (!best) {
+      for (const d of D) {
+        const x = e.x + d[0];
+        const y = e.y + d[1];
+
+        if (x < 0 || y < 0 || x >= N || y >= N) continue;
+        if (trl[ix(x, y)] === e.id) continue;
+
+        best = d;
+        break;
+      }
+    }
+
+    return best;
+  }
+
+  // Steps from (e.x,e.y) along m until leaving own territory.
+  // Returns step count, or -1 if a wall is hit first.
+  function exitDist(e, m) {
+    let x = e.x;
+    let y = e.y;
+
+    for (let k = 1; k <= 70; k++) {
+      x += m[0];
+      y += m[1];
+
+      if (x < 0 || y < 0 || x >= N || y >= N) return -1;
+
+      if (own[ix(x, y)] !== e.id) return k;
+    }
+
+    return -1;
+  }
+
+  // Plan a rectangular capture loop; picks the best-scoring candidate.
+  function makePlan(e) {
+    const sx = e.x;
+    const sy = e.y;
+
+    const clampC = v => Math.max(1, Math.min(N - 2, v));
+
+    const build = (m, l, L, W, a, ext) => {
+      const pt = (fm, fl) => ({
+        x: clampC(sx + m[0] * fm + l[0] * fl),
+        y: clampC(sy + m[1] * fm + l[1] * fl)
+      });
+
+      const wp = [];
+
+      if (a !== 0) wp.push(pt(0, a));
+
+      wp.push(pt(L, a), pt(L, a + W), pt(0, a + W));
+
+      return {
+        wp,
+        ext,
+        W,
+        maxTrail: 2 * ext + W + 14,
+        age: 0
+      };
+    };
+
+    const score = (p, bonus, k) => {
+      let x0 = sx, x1 = sx, y0 = sy, y1 = sy;
+
+      for (const w of p.wp) {
+        if (w.x < x0) x0 = w.x;
+        if (w.x > x1) x1 = w.x;
+        if (w.y < y0) y0 = w.y;
+        if (w.y > y1) y1 = w.y;
+      }
+
+      let gain = 0;
+
+      for (let y = y0; y <= y1; y++) {
+        for (let x = x0; x <= x1; x++) {
+          const o = own[ix(x, y)];
+
+          if (o === e.id) continue;
+
+          gain += o ? 1.4 : 1;
+        }
+      }
+
+      const cost = 2 * p.ext + p.W + 4 + .2 * k;
+
+      let s = gain / cost + bonus;
+
+      for (const o of ents) {
+        if (o === e || !o.alive) continue;
+
+        if (
+          o.x >= x0 - 5 && o.x <= x1 + 5 &&
+          o.y >= y0 - 5 && o.y <= y1 + 5
+        ) {
+          s -= e.caution;
+        }
+      }
+
+      return s;
+    };
+
+    let bestPlan = null;
+    let bestScore = -Infinity;
+
+    // Random rectangle candidates launched in each direction
+    for (let mi = 0; mi < 4; mi++) {
+      const m = D[mi];
+      const k = exitDist(e, m);
+
+      if (k < 0) continue;
+
+      const l0 = D[(mi + 1) % 4];
+
+      for (const sgn of [1, -1]) {
+        const l = [l0[0] * sgn, l0[1] * sgn];
+
+        for (let t = 0; t < 2; t++) {
+          const ext = 3 + (Math.random() * (8 + 10 * e.greed) | 0);
+          const W = 4 + (Math.random() * (5 + 8 * e.greed) | 0);
+          const p = build(m, l, k + ext, W, 0, ext);
+          const s = score(p, 0, k);
+
+          if (s > bestScore) {
+            bestScore = s;
+            bestPlan = p;
+          }
+        }
+      }
+    }
+
+    // Tower-targeted candidate (nearest tower we don't own)
+    let tw = null;
+    let td = 1e9;
+
+    for (const t of towers) {
+      if (t.o === e.id) continue;
+
+      const d = Math.abs(t.x - sx) + Math.abs(t.y - sy);
+
+      if (d < td) {
+        td = d;
+        tw = t;
+      }
+    }
+
+    if (tw && td <= 34) {
+      const ox = tw.x - sx;
+      const oy = tw.y - sy;
+
+      let m, l, moff, loff;
+
+      if (Math.abs(ox) >= Math.abs(oy)) {
+        m = [ox >= 0 ? 1 : -1, 0];
+        moff = Math.abs(ox);
+        l = [0, oy === 0 ? (Math.random() < .5 ? 1 : -1) : (oy > 0 ? 1 : -1)];
+        loff = Math.abs(oy);
+      } else {
+        m = [0, oy >= 0 ? 1 : -1];
+        moff = Math.abs(oy);
+        l = [ox === 0 ? (Math.random() < .5 ? 1 : -1) : (ox > 0 ? 1 : -1), 0];
+        loff = Math.abs(ox);
+      }
+
+      if (moff >= 2) {
+        const a = loff >= 3 ? 0 : loff - 3;
+        const W = loff - a + 3;
+        const L = moff + 3;
+        const k = Math.max(0, exitDist(e, m));
+        const ext = Math.max(2, L - k);
+        const p = build(m, l, L, W, a, ext);
+        const s = score(p, 3, k);
+
+        if (s > bestScore) {
+          bestScore = s;
+          bestPlan = p;
+        }
+      }
+    }
+
+    if (!bestPlan) {
+      const ahead = {
+        x: clampC(sx + e.dx * 6),
+        y: clampC(sy + e.dy * 6)
+      };
+
+      bestPlan = {
+        wp: [ahead],
+        ext: 6,
+        W: 4,
+        maxTrail: 30,
+        age: 0
+      };
+    }
+
+    return bestPlan;
+  }
+
+  function ai(e) {
+    const inside = own[ix(e.x, e.y)] === e.id;
+
+    // Track trips: once we're back inside with no trail, the loop is done.
+    if (e.trail.length) {
+      e.hadTrail = true;
+    } else if (inside && e.hadTrail) {
+      e.hadTrail = false;
+      e.plan = null;
+    }
+
+    if (inside && !e.trail.length) {
+      e.out = 0;
+    } else if (!inside) {
+      e.out++;
+    }
+
+    const home = inside
+      ? { dir: -1, dist: 0 }
+      : bfsHome(e, 1800);
+
+    let goal = null;
+    let goHome = false;
+
+    // 1) Survival: fuse burning, enemy closing in, trail too long
+    if (!inside) {
+      if (e.fuse) {
+        goHome = true;
+      } else {
+        const th = threat(e);
+
+        if (th <= 3 + ((e.caution * 5) | 0)) {
+          goHome = true;
+        } else if (e.trail.length >= e.maxTrail) {
+          goHome = true;
+        }
+      }
+    }
+
+    if (!goHome) {
+      // 2) Hunt: cut nearby enemy trails
+      const prey = e.aggr > .3
+        ? findPrey(e, 10 + ((e.aggr * 14) | 0))
+        : null;
 
       if (
-        (hd[0] || hd[1]) &&
-        !(hd[0] === -e.dx && hd[1] === -e.dy) &&
-        !blocked(e, hd[0], hd[1])
+        prey &&
+        e.trail.length < e.maxTrail - 4 &&
+        (inside || home.dist <= 6 + ((e.aggr * 8) | 0))
       ) {
-        want = hd;
+        goal = prey;
+        e.plan = null;
       }
 
-    } else if (Math.random() < (inside ? .08 : .1)) {
-      want = c[1 + (Math.random() < .5 ? 1 : 0)];
-    }
+      // 3) Grab nearby power-ups
+      if (!goal) {
+        let pb = null;
+        let pd = 10;
 
-    if (want && !blocked(e, want[0], want[1])) {
-      e.dx = want[0];
-      e.dy = want[1];
-    }
+        for (const p of pu) {
+          if (p.type === 1 && e.shield > 0) continue;
 
-    if (blocked(e, e.dx, e.dy)) {
-      const ok = c.slice(1).filter(
-        d => !blocked(e, d[0], d[1])
-      );
+          const d = Math.abs(p.x - e.x) + Math.abs(p.y - e.y);
 
-      if (ok.length) {
-        const d = ok[Math.random() * ok.length | 0];
-        e.dx = d[0];
-        e.dy = d[1];
+          if (d < pd) {
+            pd = d;
+            pb = p;
+          }
+        }
+
+        if (pb && (inside || home.dist + pd <= 14)) {
+          goal = pb;
+        }
       }
+
+      // 4) Expand: follow the loop plan
+      if (!goal) {
+        if (!e.plan) {
+          if (inside) {
+            e.plan = makePlan(e);
+          } else {
+            goHome = true;
+          }
+        }
+
+        if (e.plan) {
+          if (++e.plan.age > 220) {
+            e.plan = null;
+            if (!inside) goHome = true;
+          } else {
+            while (
+              e.plan.wp.length &&
+              e.plan.wp[0].x === e.x &&
+              e.plan.wp[0].y === e.y
+            ) {
+              e.plan.wp.shift();
+            }
+
+            if (e.plan.wp.length) {
+              goal = e.plan.wp[0];
+              e.maxTrail = e.plan.maxTrail;
+            } else {
+              e.plan = null;
+              if (!inside) goHome = true;
+            }
+          }
+        }
+      }
+
+      if (!goal && !goHome) {
+        e.plan = makePlan(e);
+
+        goal = e.plan.wp[0] || {
+          x: Math.max(1, Math.min(N - 2, e.x + e.dx * 5)),
+          y: Math.max(1, Math.min(N - 2, e.y + e.dy * 5))
+        };
+
+        e.maxTrail = e.plan.maxTrail;
+      }
+    }
+
+    let dir = null;
+
+    if (goHome && home.dir >= 0) {
+      dir = D[home.dir];
+    }
+
+    if (!dir) {
+      dir = pickDir(e, goal || e.home);
+    }
+
+    if (dir) {
+      e.dx = dir[0];
+      e.dy = dir[1];
     }
   }
 
@@ -1018,6 +1500,11 @@ function Game(code, onEmpty) {
 
       // Give the returning bot a fresh identity
       e.name = botName(e);
+
+      // Fresh bot brain for the takeover
+      e.plan = null;
+      e.hadTrail = false;
+      e.stopped = false;
 
       if (!e.alive) {
         e.respawn = 3;
