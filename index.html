@@ -45,11 +45,14 @@ button:disabled{opacity:.55;cursor:wait}
 #menu{z-index:10}
 #loadingScreen{position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at center,#101a35,#05060c 70%);transition:opacity .6s}
 #flipScene{perspective:1400px;width:min(404px,100vw);height:400px;transition:transform .6s ease}
-#flipInner{position:relative;width:100%;height:100%;transform-style:preserve-3d;transition:transform .9s cubic-bezier(.45,.05,.2,1)}
+#flipInner{position:relative;width:100%;height:100%;transform-style:preserve-3d;transition:transform .5s cubic-bezier(.4,0,.2,1)}
 #flipInner.flipped{transform:rotateY(180deg)}
 .face{position:absolute;inset:0;box-sizing:border-box;backface-visibility:hidden;-webkit-backface-visibility:hidden;display:flex;flex-direction:column;justify-content:center;text-align:center;padding:28px 32px;border:1px solid var(--acc);border-radius:18px;background:var(--panel);box-shadow:0 0 40px rgba(0,240,255,.25)}
 .face.back{transform:rotateY(180deg)}
-#startBtn{margin-top:10px}
+#startBtn{margin-top:10px;transition:transform .12s ease,box-shadow .12s ease,filter .12s ease;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+#startBtn:hover{transform:scale(1.04);box-shadow:0 0 22px rgba(0,240,255,.55);filter:brightness(1.12)}
+#startBtn:active{transform:scale(.95);box-shadow:0 0 10px rgba(0,240,255,.4);filter:brightness(.95)}
+#startBtn:focus-visible{outline:2px solid #fff;outline-offset:3px}
 #loadingScreen.leaving{opacity:0}
 #loadingScreen.leaving #flipScene{transform:scale(1.07)}
 #card.enter{animation:cardIn .7s ease both}
@@ -57,7 +60,7 @@ button:disabled{opacity:.55;cursor:wait}
 #loadingTitle,.lt{font-size:38px;font-weight:900;letter-spacing:3px;line-height:1.2;background:linear-gradient(90deg,var(--acc),var(--acc2));-webkit-background-clip:text;background-clip:text;color:transparent}
 #loadingBar{height:8px;background:#141a2d;border-radius:20px;overflow:hidden;margin:22px 0 10px;border:1px solid rgba(0,240,255,.25)}
 #loadingFill{height:100%;width:0%;background:linear-gradient(90deg,var(--acc),var(--acc2));border-radius:20px}
-#flipInner.flipped #loadingFill{animation:loadFill 10s linear .9s forwards}
+#flipInner.flipped #loadingFill{animation:loadFill 5s linear .5s forwards}
 @keyframes loadFill{from{width:0%}to{width:100%}}
 #shopBtn{background:rgba(120,130,150,.12);color:#9ba8bd;border:1px solid rgba(150,160,180,.25);margin-top:9px;cursor:not-allowed;letter-spacing:1px}
 #shopBtn:disabled{opacity:.75}
@@ -186,7 +189,7 @@ function startMusic(){
     musicStarted=true;
     {const lt=$('loadingText');if(lt)lt.textContent='LOADING GAME...';}
     const startTime=performance.now();
-    const fadeDuration=2000;
+    const fadeDuration=1000;
 
     function fadeIn(now){
       if(musicStopRequested)return;
@@ -594,10 +597,11 @@ function loop(n){requestAnimationFrame(loop);const dt=Math.min(.05,(n-last)/1000
   window.removeEventListener('resize',sizeFlip);
 
   $('flipInner').classList.add('flipped');
-  // music starts when the bar reaches 20% (0.9s flip + 2s)
-  setTimeout(()=>{musicAllowed=true;startMusic();},2900);
+  // music fades in (1s) right after the click
+  musicAllowed=true;
+  startMusic();
 
-  await new Promise(resolve=>setTimeout(resolve,900+10000));
+  await new Promise(resolve=>setTimeout(resolve,500+5000));
 
   $('card').classList.add('enter');
   $('loadingScreen').classList.add('leaving');
