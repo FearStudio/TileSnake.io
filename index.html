@@ -417,38 +417,56 @@ function loop(n){requestAnimationFrame(loop);const dt=Math.min(.05,(n-last)/1000
 
 (async()=>{
  
-(async()=>{
   requestAnimationFrame(loop);
 
   const introMusic=$('introMusic');
   introMusic.loop=true;
-  introMusic.volume=settings.musicVolume/100;
+
+  const targetVolume=settings.musicVolume/100;
+  introMusic.volume=0;
 
   let musicStarted=false;
 
   async function startMusic(){
-    if(musicStarted || settings.musicVolume<=0)return;
+    if(musicStarted || settings.musicVolume===0)return;
 
     try{
+      introMusic.volume=0;
       await introMusic.play();
       musicStarted=true;
-      console.log('[Music] Playing');
+
+      // Smooth 2-second fade-in
+      const startTime=performance.now();
+      const fadeDuration=2000;
+
+      function fadeIn(now){
+        const progress=Math.min(1,(now-startTime)/fadeDuration);
+        introMusic.volume=targetVolume*progress;
+
+        if(progress<1){
+          requestAnimationFrame(fadeIn);
+        }
+      }
+
+      requestAnimationFrame(fadeIn);
 
       document.removeEventListener('click',startMusic);
       document.removeEventListener('keydown',startMusic);
       document.removeEventListener('touchstart',startMusic);
-      $('musicVolume').removeEventListener('input',startMusic);
+
+      console.log('[Music] Playing with fade-in');
     }catch(e){
-      console.log('[Music] Playback waiting for interaction:',e);
+      console.log('[Music] Waiting for interaction:',e);
     }
   }
 
+  // Try immediately when the loading screen appears
+  startMusic();
+
+  // If autoplay is blocked, start on first interaction
   document.addEventListener('click',startMusic);
   document.addEventListener('keydown',startMusic);
   document.addEventListener('touchstart',startMusic,{passive:true});
-  $('musicVolume').addEventListener('input',startMusic);
-
-  startMusic();
 
   try{
     if(CG){
@@ -486,7 +504,9 @@ function loop(n){requestAnimationFrame(loop);const dt=Math.min(.05,(n-last)/1000
     play();
 })();
 
-})();
+
+
+
 </script>
 </body>
 </html>
