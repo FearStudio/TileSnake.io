@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -77,7 +78,7 @@ button:disabled{opacity:.55;cursor:wait}
 <body>
 <canvas id="c"></canvas>
 <div id="loadingScreen"><div id="flipScene"><div id="flipInner"><div class="face front"><div class="lt">TILE SNAKE</div><div class="sub">BY FEAR STUDIO</div><button id="startBtn">CLICK TO START</button></div><div class="face back"><div id="loadingTitle">TILE SNAKE</div><div class="sub">BY FEAR STUDIO</div><div id="loadingBar"><div id="loadingFill"></div></div><div id="loadingText">LOADING GAME...</div></div></div></div></div>
-<audio id="introMusic" preload="auto"><source src="loadingtomenusong.mp3" type="audio/mpeg"></audio><audio id="tailBrokenSound" preload="auto" loop><source src="idoberg-edm-melody-loop-02-270226.mp3" type="audio/mpeg"></audio>
+<audio id="introMusic" preload="auto"><source src="loadingtomenusong.mp3" type="audio/mpeg"></audio><audio id="gameMusic" preload="auto" loop><source src="Neon_Snake_Loop.mp3" type="audio/mpeg"></audio><audio id="tailBrokenSound" preload="auto" loop><source src="idoberg-edm-melody-loop-02-270226.mp3" type="audio/mpeg"></audio>
 <div class="hud" id="st">Territory <b id="pct">0%</b> · Best <span id="bst">0%</span><br>Kills <span id="kl">0</span> · Best <span id="bstk">0</span></div>
 <div class="hud" id="lb"></div>
 <div id="feed"></div>
@@ -90,9 +91,9 @@ button:disabled{opacity:.55;cursor:wait}
 <div class="setting">
 <div class="settingRow">
 <label for="musicVolume">Music Volume</label>
-<span class="settingValue" id="musicVolumeValue">16%</span>
+<span class="settingValue" id="musicVolumeValue">9%</span>
 </div>
-<input id="musicVolume" type="range" min="0" max="100" step="1" value="16">
+<input id="musicVolume" type="range" min="0" max="100" step="1" value="9">
 </div>
 
 <div class="setting">
@@ -166,7 +167,7 @@ const rgb=COLORS.map(c=>[parseInt(c.slice(1,3),16),parseInt(c.slice(3,5),16),par
 const $=id=>document.getElementById(id);
 
 // SETTINGS
-const settings={uiSize:100,miniMapSize:100,musicVolume:16,sfxVolume:16};
+const settings={uiSize:100,miniMapSize:100,musicVolume:9,sfxVolume:16};
 let musicFadeProgress=0;
 let musicStarted=false;
 let musicStopRequested=false;
@@ -216,6 +217,34 @@ function startMusic(){
       if(lt)lt.textContent='CLICK ANYWHERE FOR MUSIC';
     }
   });
+}
+
+const gameMusic=$('gameMusic');
+gameMusic.loop=true;
+gameMusic.volume=0;
+let gameMusicFade=1,gameMusicRAF=null,gameMusicOn=false;
+function setGameMusicVolume(){gameMusic.volume=Math.min(1,Math.max(0,(settings.musicVolume/100)*gameMusicFade));}
+function startGameMusic(){
+  if(gameMusicOn)return;
+  gameMusicOn=true;
+  gameMusicFade=0;
+  setGameMusicVolume();
+  gameMusic.currentTime=0;
+  gameMusic.play().then(()=>{
+    const t0=performance.now();
+    (function step(now){
+      if(!gameMusicOn)return;
+      gameMusicFade=Math.min(1,(now-t0)/1000);
+      setGameMusicVolume();
+      if(gameMusicFade<1)gameMusicRAF=requestAnimationFrame(step);
+    })(t0);
+  }).catch(e=>{gameMusicOn=false;console.log('[GameMusic] Blocked:',e);});
+}
+function stopGameMusic(){
+  gameMusicOn=false;
+  if(gameMusicRAF!==null){cancelAnimationFrame(gameMusicRAF);gameMusicRAF=null;}
+  gameMusic.pause();
+  gameMusic.currentTime=0;
 }
 
 const tailBrokenSound=$('tailBrokenSound');
@@ -271,7 +300,7 @@ function loadSettings(){
   const savedMusicVolume=Number(settings.musicVolume);
   settings.musicVolume=Number.isFinite(savedMusicVolume)
     ? Math.min(100,Math.max(0,savedMusicVolume))
-    : 16;
+    : 9;
   const savedSfx=Number(settings.sfxVolume);
   settings.sfxVolume=Number.isFinite(savedSfx)
     ? Math.min(99,Math.max(1,Math.round(savedSfx)))
@@ -295,6 +324,7 @@ function applySettings(){
   $('musicVolume').value=settings.musicVolume;
 
   introMusic.volume=(settings.musicVolume/100)*musicFadeProgress;
+  setGameMusicVolume();
 
   $('sfxVolumeValue').textContent=settings.sfxVolume+'%';
   $('sfxVolume').value=settings.sfxVolume;
@@ -364,12 +394,12 @@ function play(){
 function onMsg(m){
   if(m.t==='init'){
     me=m.id;room=m.room;inviteRoom='';joining=false;autoTries=0;reconnecting=false;retriedFull=false;kicked=false;
-    setTailBrokenSound(false);saveRoom(room);own=b64(m.own);trl=b64(m.trl);P={};popups=[];$('feed').innerHTML='';
+    setTailBrokenSound(false);startGameMusic();saveRoom(room);own=b64(m.own);trl=b64(m.trl);P={};popups=[];$('feed').innerHTML='';
     menu(false,'');updateCrazyGamesRoom();gp(1);console.log('[Game] Joined room:',room);
     if(pendingHomeInvite){pendingHomeInvite=false;copyInviteLink($('homeInvite')).catch(e=>{console.error('[Home invite]',e);$('homeInvite').textContent='INVITE LINK UNAVAILABLE';});}
   }else if(m.t==='s'){snap(m);}
   else if(m.t==='dead'){
-    setTailBrokenSound(false);gp(0);joining=false;
+    setTailBrokenSound(false);stopGameMusic();gp(0);joining=false;
     try{if(CG&&CG.game&&CG.game.leftRoom)CG.game.leftRoom();}catch(e){}
     menu(true,'<b style="color:#ff2e88;font-size:20px">ELIMINATED</b>'+(m.by?' by '+m.by:'')+'<br>Territory '+m.area.toFixed(1)+'% · Kills '+m.kills);
     $('go').textContent='PLAY AGAIN';
@@ -444,6 +474,7 @@ $('sfxVolume').oninput=e=>{settings.sfxVolume=Math.min(99,Math.max(1,+e.target.v
 $('musicVolume').oninput=e=>{
   settings.musicVolume=+e.target.value;
   introMusic.volume=(settings.musicVolume/100)*musicFadeProgress;
+  setGameMusicVolume();
   saveSettings();
   applySettings();
 };
