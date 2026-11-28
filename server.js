@@ -1,5 +1,6 @@
-// Tile Snake.io — authoritative multiplayer server.
-// Run: npm i && node server.js
+
+ // Tile Snake.io — authoritative multiplayer server.
+ // Run: npm i && node server.js
 
 const http = require('http');
 const { WebSocketServer } = require('ws');
@@ -15,7 +16,6 @@ const COLORS = [
   '#4dffd2', '#e0e0ff', '#ffa6ff', '#a6ff00'
 ];
 
-// Expanded bot name pool
 const BOTS = [
   'Deadlock','Rifted','HavocX','Wraithen','NoMercy',
   'Recoilz','Shatter','Outaimed','Headtap','Erased',
@@ -113,7 +113,6 @@ function Game(code, onEmpty) {
     }
   }
 
-  // Pick a fresh bot name, avoiding names used by other living bots
   function botName(e) {
     const used = new Set(
       ents
@@ -158,40 +157,62 @@ function Game(code, onEmpty) {
 
   ents = Array.from({ length: SLOTS }, (_, i) => mk(i + 1));
 
+  // SAFE SPAWNING
   function spawn(e) {
     if (e.bot) e.name = botName(e);
 
-    let x = 0;
-    let y = 0;
+    let x = -1, y = -1;
+    const margin = 5;
+    const radius = 4;
+    const candidates = [];
 
-    for (let k = 0; k < 300; k++) {
-      x = 4 + (Math.random() * (N - 8) | 0);
-      y = 4 + (Math.random() * (N - 8) | 0);
+    // Find locations where the surrounding area is completely unclaimed.
+    for (let cy = margin; cy < N - margin; cy++) {
+      for (let cx = margin; cx < N - margin; cx++) {
+        let ok = true;
 
-      let ok = true;
+        for (let dy = -radius; dy <= radius && ok; dy++) {
+          for (let dx = -radius; dx <= radius; dx++) {
+            const i = ix(cx + dx, cy + dy);
 
-      for (let dy = -3; dy <= 3 && ok; dy++) {
-        for (let dx = -3; dx <= 3; dx++) {
-          const i = ix(x + dx, y + dy);
-
-          if (own[i] || trl[i]) {
-            ok = false;
-            break;
+            if (own[i] !== 0 || trl[i] !== 0) {
+              ok = false;
+              break;
+            }
           }
         }
-      }
 
-      if (
-        towers.some(
-          t => Math.abs(t.x - x) < 9 &&
-               Math.abs(t.y - y) < 9
-        )
-      ) {
-        ok = false;
-      }
+        // Stay clear of tower areas.
+        if (ok && towers.some(t =>
+          Math.abs(t.x - cx) < 11 &&
+          Math.abs(t.y - cy) < 11
+        )) {
+          ok = false;
+        }
 
-      if (ok) break;
+        // Stay away from nearby living players and bots.
+        if (ok && ents.some(v =>
+          v !== e && v.alive &&
+          Math.abs(v.x - cx) < 9 &&
+          Math.abs(v.y - cy) < 9
+        )) {
+          ok = false;
+        }
+
+        if (ok) candidates.push({ x: cx, y: cy });
+      }
     }
+
+    // If no safe spawn exists, retry later.
+    if (!candidates.length) {
+      e.alive = false;
+      e.respawn = 2;
+      return false;
+    }
+
+    const chosen = candidates[Math.random() * candidates.length | 0];
+    x = chosen.x;
+    y = chosen.y;
 
     for (let dy = -1; dy <= 1; dy++) {
       for (let dx = -1; dx <= 1; dx++) {
@@ -216,8 +237,11 @@ function Game(code, onEmpty) {
       fuse: null,
       fuseAcc: 0,
       stopped: false,
-      home: { x, y }
+      home: { x, y },
+      limit: 8 + (Math.random() * 12 | 0)
     });
+
+    return true;
   }
 
   function clear(e) {
@@ -245,62 +269,144 @@ function Game(code, onEmpty) {
     return trl[ix(x, y)] === e.id;
   }
 
-  // Bot AI
+  // SMARTER BOT AI
   function ai(e) {
     const inside = own[ix(e.x, e.y)] === e.id;
 
-    if (inside) {
-      if (!e.trail.length) {
-        e.out = 0;
-        e.limit = 6 + (Math.random() * 16 | 0);
-      }
-    } else {
+    if (inside && !e.trail.length) {
+      e.out = 0;
+      e.limit = 8 + (Math.random() * 12 | 0);
+      e.home = { x: e.x, y: e.y };
+    } else if (!inside) {
       e.out++;
     }
 
-    const c = [
+    const candidates = [
       [e.dx, e.dy],
       [-e.dy, e.dx],
       [e.dy, -e.dx]
     ];
 
-    let want = null;
+    const hx = e.home.x - e.x;
+    const hy = e.home.y - e.y;
 
-    if (!inside && e.out > e.limit) {
-      const hx = e.home.x - e.x;
-      const hy = e.home.y - e.y;
+    const returning = !inside && e.out > e.limit * .65;
 
-      const hd = Math.abs(hx) > Math.abs(hy)
-        ? [Math.sign(hx), 0]
-        : [0, Math.sign(hy)];
+    let best = null;
+    let bestScore = -Infinity;
 
-      if (
-        (hd[0] || hd[1]) &&
-        !(hd[0] === -e.dx && hd[1] === -e.dy) &&
-        !blocked(e, hd[0], hd[1])
-      ) {
-        want = hd;
+    for (const d of candidates) {
+      const nx = e.x + d[0];
+      const ny = e.y + d[1];
+
+      if (nx < 1 || ny < 1 || nx >= N - 1 || ny >= N - 1) {
+        continue;
       }
 
-    } else if (Math.random() < (inside ? .08 : .1)) {
-      want = c[1 + (Math.random() < .5 ? 1 : 0)];
-    }
+      const i = ix(nx, ny);
 
-    if (want && !blocked(e, want[0], want[1])) {
-      e.dx = want[0];
-      e.dy = want[1];
-    }
+      // Never move into own trail.
+      if (trl[i] === e.id) continue;
 
-    if (blocked(e, e.dx, e.dy)) {
-      const ok = c.slice(1).filter(
-        d => !blocked(e, d[0], d[1])
-      );
+      let score = Math.random() * 2;
 
-      if (ok.length) {
-        const d = ok[Math.random() * ok.length | 0];
-        e.dx = d[0];
-        e.dy = d[1];
+      // Avoid trails.
+      if (trl[i]) {
+        score -= 1000;
       }
+
+      // Prefer safe territory and open land.
+      if (own[i] === e.id) {
+        score += 12;
+      } else if (own[i] === 0) {
+        score += 5;
+      } else {
+        score += 1;
+      }
+
+      // Avoid the board edge.
+      const edge = Math.min(nx, ny, N - 1 - nx, N - 1 - ny);
+      score += Math.min(edge, 8) * 1.5;
+
+      // Look ahead to judge the next five tiles.
+      for (let look = 1; look <= 5; look++) {
+        const fx = nx + d[0] * look;
+        const fy = ny + d[1] * look;
+
+        if (fx < 1 || fy < 1 || fx >= N - 1 || fy >= N - 1) {
+          score -= 12;
+          break;
+        }
+
+        const fi = ix(fx, fy);
+
+        if (trl[fi] === e.id) {
+          score -= 25;
+        } else if (trl[fi]) {
+          score -= 14;
+        } else {
+          score += .8;
+        }
+      }
+
+      // Avoid nearby enemy heads.
+      for (const v of ents) {
+        if (v === e || !v.alive) continue;
+
+        const dist = Math.abs(v.x - nx) + Math.abs(v.y - ny);
+
+        if (dist < 4) {
+          score -= (4 - dist) * 4;
+        }
+
+        // Slightly encourage opportunities near exposed trails.
+        if (v.trail.length && dist < 7) {
+          score += 1.5;
+        }
+      }
+
+      // Return toward home when exposed too long.
+      if (returning) {
+        const distance = Math.abs(hx) + Math.abs(hy);
+
+        const toward =
+          Math.abs(hx) > Math.abs(hy)
+            ? d[0] === Math.sign(hx) && d[1] === 0
+            : d[1] === Math.sign(hy) && d[0] === 0;
+
+        if (toward) score += 25 + e.out * 1.5;
+        if (distance < 4) score += 10;
+      }
+
+      // Move toward nearby perks.
+      for (const p of pu) {
+        const dist = Math.abs(p.x - nx) + Math.abs(p.y - ny);
+
+        if (dist < 12) {
+          score += (12 - dist) * .8;
+        }
+      }
+
+      // Explore toward unclaimed towers.
+      for (const t of towers) {
+        if (!t.o) {
+          const dist = Math.abs(t.x - nx) + Math.abs(t.y - ny);
+
+          if (dist < 18) {
+            score += (18 - dist) * .25;
+          }
+        }
+      }
+
+      if (score > bestScore) {
+        bestScore = score;
+        best = d;
+      }
+    }
+
+    if (best) {
+      e.dx = best[0];
+      e.dy = best[1];
     }
   }
 
@@ -444,7 +550,7 @@ function Game(code, onEmpty) {
     }
   }
 
-    function wave(z) {
+  function wave(z) {
     const o = ents[z.o - 1];
 
     for (
@@ -487,7 +593,6 @@ function Game(code, onEmpty) {
     }
   }
 
-  // how many tiles inside the tower's radius are not its owner's colour
   function needsReclaim(t) {
     let n = 0;
 
@@ -696,7 +801,7 @@ function Game(code, onEmpty) {
 
     towerCheck();
 
-    // owned towers reclaim land inside their radius
+    // Owned towers reclaim land inside their radius.
     for (const t of towers) {
       if (!t.o || t.wv || !ents[t.o - 1].alive || !needsReclaim(t)) {
         t.cd = 0;
@@ -842,7 +947,7 @@ function Game(code, onEmpty) {
     }, 600000);
   }
 
-    return {
+  return {
     code,
     pub: false,
 
@@ -853,7 +958,7 @@ function Game(code, onEmpty) {
 
       let e = null;
 
-      // 1) Same player coming back (reload / dropped connection)
+      // Same player returning.
       if (sid) {
         e = ents.find(x => x.sid === sid && (x.bot || x.ws));
 
@@ -869,7 +974,7 @@ function Game(code, onEmpty) {
 
       const reclaimed = !!e;
 
-      // 2) Someone new: take over a bot
+      // Take over a bot.
       if (!e) {
         const now = Date.now();
 
@@ -955,7 +1060,7 @@ function Game(code, onEmpty) {
       d = d | 0;
       const nd = D[d];
 
-      // stopped: go any way except back onto your own trail
+      // Stopped: resume in a valid direction.
       if (e.stopped) {
         const x = e.x + nd[0];
         const y = e.y + nd[1];
@@ -972,7 +1077,7 @@ function Game(code, onEmpty) {
         return;
       }
 
-      // Opposite direction stops the player
+      // Opposite direction stops player.
       const hd = e.q !== null ? D[e.q] : [e.dx, e.dy];
 
       if (nd[0] === -hd[0] && nd[1] === -hd[1]) {
@@ -989,7 +1094,7 @@ function Game(code, onEmpty) {
       e.q = d;
     },
 
-    // stop / go toggle
+    // Stop / go toggle.
     stop(e) {
       if (!e.alive) return;
 
@@ -1016,7 +1121,7 @@ function Game(code, onEmpty) {
       e.bot = true;
       e.hold = Date.now() + 60000;
 
-      // Give the returning bot a fresh identity
+      // Give returning bot a fresh identity.
       e.name = botName(e);
 
       if (!e.alive) {
