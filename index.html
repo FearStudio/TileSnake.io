@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -65,7 +64,7 @@ button:disabled{opacity:.55;cursor:wait}
 <body>
 <canvas id="c"></canvas>
 <div id="loadingScreen"><div id="loadingCard"><div id="loadingTitle">TILE SNAKE</div><div class="sub">BY FEAR STUDIO</div><div id="loadingBar"><div id="loadingFill"></div></div><div id="loadingText">LOADING GAME...</div></div></div>
-<audio id="introMusic" preload="auto"><source src="loadingtomenusong.mp3" type="audio/mpeg"></audio>
+<audio id="introMusic" preload="auto"><source src="loadingtomenusong.mp3" type="audio/mpeg"></audio><audio id="tailBrokenSound" preload="auto" loop><source src="idoberg-edm-melody-loop-02-270226.mp3" type="audio/mpeg"></audio>
 <div class="hud" id="st">Territory <b id="pct">0%</b><br>Kills <span id="kl">0</span> · Best <span id="bst">0%</span></div>
 <div class="hud" id="lb"></div>
 <div id="feed"></div>
@@ -188,6 +187,22 @@ function startMusic(){
   }).catch(e=>{
     if(!musicStopRequested)console.log('[Music] Waiting for interaction:',e);
   });
+}
+
+const tailBrokenSound=$('tailBrokenSound');
+tailBrokenSound.loop=true;
+tailBrokenSound.volume=0.7;
+let tailBrokenPlaying=false;
+function setTailBrokenSound(on){
+  if(on===tailBrokenPlaying)return;
+  tailBrokenPlaying=on;
+  if(on){
+    tailBrokenSound.currentTime=0;
+    tailBrokenSound.play().catch(e=>console.log('[TailSound] Blocked:',e));
+  }else{
+    tailBrokenSound.pause();
+    tailBrokenSound.currentTime=0;
+  }
 }
 
 function fadeOutMenuMusic(){
@@ -321,12 +336,12 @@ function play(){
 function onMsg(m){
   if(m.t==='init'){
     me=m.id;room=m.room;inviteRoom='';joining=false;autoTries=0;reconnecting=false;retriedFull=false;kicked=false;
-    saveRoom(room);own=b64(m.own);trl=b64(m.trl);P={};popups=[];$('feed').innerHTML='';
+    setTailBrokenSound(false);saveRoom(room);own=b64(m.own);trl=b64(m.trl);P={};popups=[];$('feed').innerHTML='';
     menu(false,'');updateCrazyGamesRoom();gp(1);console.log('[Game] Joined room:',room);
     if(pendingHomeInvite){pendingHomeInvite=false;copyInviteLink($('homeInvite')).catch(e=>{console.error('[Home invite]',e);$('homeInvite').textContent='INVITE LINK UNAVAILABLE';});}
   }else if(m.t==='s'){snap(m);}
   else if(m.t==='dead'){
-    gp(0);joining=false;
+    setTailBrokenSound(false);gp(0);joining=false;
     try{if(CG&&CG.game&&CG.game.leftRoom)CG.game.leftRoom();}catch(e){}
     menu(true,'<b style="color:#ff2e88;font-size:20px">ELIMINATED</b>'+(m.by?' by '+m.by:'')+'<br>Territory '+m.area.toFixed(1)+'% · Kills '+m.kills);
     $('go').textContent='PLAY AGAIN';
@@ -355,6 +370,7 @@ function snap(m){
     Object.assign(p,{id:e.i,x:e.x,y:e.y,dx:e.dx,dy:e.dy,a:e.a,b:e.b,s:e.s,f:e.f,k:e.k,r:e.r,n:e.n,h:e.h,z:e.z,c:COLORS[e.i-1]});
   }
   pu=m.pu;towers=m.tw;
+  {const mine=P[me];setTailBrokenSound(!!(mine&&mine.a&&mine.f));}
   for(const v of m.ev){
     if(v.k==='say'){
       const d=document.createElement('div');d.textContent=v.m;$('feed').appendChild(d);
