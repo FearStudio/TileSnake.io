@@ -559,6 +559,19 @@ function loop(n){requestAnimationFrame(loop);const dt=Math.min(.05,(n-last)/1000
   sizeFlip();
   window.addEventListener('resize',sizeFlip);
   $('startBtn').focus();
+
+  // React to the click instantly (before the SDK finishes loading)
+  let clickTime=0;
+  const startClicked=new Promise(resolve=>{
+    $('startBtn').addEventListener('click',()=>{
+      clickTime=performance.now();
+      window.removeEventListener('resize',sizeFlip);
+      $('flipInner').classList.add('flipped');
+      musicAllowed=true;
+      startMusic();
+      resolve();
+    },{once:true});
+  });
   document.addEventListener('pointerdown',startMusic);
   document.addEventListener('mousedown',startMusic);
   document.addEventListener('click',startMusic);
@@ -592,16 +605,10 @@ function loop(n){requestAnimationFrame(loop);const dt=Math.min(.05,(n-last)/1000
       CG.game.loadingStop();
   }catch(e){}
 
-  sizeFlip();
-  await new Promise(resolve=>$('startBtn').addEventListener('click',resolve,{once:true}));
-  window.removeEventListener('resize',sizeFlip);
+  await startClicked;
 
-  $('flipInner').classList.add('flipped');
-  // music fades in (1s) right after the click
-  musicAllowed=true;
-  startMusic();
-
-  await new Promise(resolve=>setTimeout(resolve,500+5000));
+  // flip (0.5s) + 5s loading, counted from the click
+  await new Promise(resolve=>setTimeout(resolve,Math.max(0,clickTime+5500-performance.now())));
 
   $('card').classList.add('enter');
   $('loadingScreen').classList.add('leaving');
