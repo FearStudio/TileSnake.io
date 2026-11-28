@@ -65,7 +65,7 @@ button:disabled{opacity:.55;cursor:wait}
 <canvas id="c"></canvas>
 <div id="loadingScreen"><div id="loadingCard"><div id="loadingTitle">TILE SNAKE</div><div class="sub">BY FEAR STUDIO</div><div id="loadingBar"><div id="loadingFill"></div></div><div id="loadingText">LOADING GAME...</div></div></div>
 <audio id="introMusic" preload="auto"><source src="loadingtomenusong.mp3" type="audio/mpeg"></audio><audio id="tailBrokenSound" preload="auto" loop><source src="idoberg-edm-melody-loop-02-270226.mp3" type="audio/mpeg"></audio>
-<div class="hud" id="st">Territory <b id="pct">0%</b><br>Kills <span id="kl">0</span> · Best <span id="bst">0%</span></div>
+<div class="hud" id="st">Territory <b id="pct">0%</b> · Best <span id="bst">0%</span><br>Kills <span id="kl">0</span> · Best <span id="bstk">0</span></div>
 <div class="hud" id="lb"></div>
 <div id="feed"></div>
 <button id="settingsTab" class="alt">SETTINGS [P]</button>
@@ -114,7 +114,7 @@ button:disabled{opacity:.55;cursor:wait}
 <input id="nm" maxlength="12" placeholder="Enter your name" autocomplete="off">
 <div id="menuButtons"><button id="go">PLAY MULTIPLAYER</button><button id="shopBtn" disabled>SHOP 🔒 &nbsp; COMING SOON</button><button id="guideBtn" class="alt">GUIDE / CONTROLS</button></div>
 <button id="homeInvite" class="alt">COPY INVITE LINK</button>
-<div class="help">Arrows / WASD or swipe to move.<br>Stop anytime: press the opposite way, press Space, or tap. Then go any way except back onto your trail.<br>Leave your zone, loop back to claim land.<br>Cross a trail to cut it — the cut races to the owner’s head. Hit your own trail and it cuts you too.<br><b style="color:#ffd400">»</b> speed &nbsp;<b style="color:#00f0ff">◈</b> shield &nbsp;Towers: surround one with your colour to claim it and flood a radius. Kills give Overdrive.</div></div></div>
+</div></div>
 
 <div id="guide"><div id="guideCard"><h2>HOW TO PLAY</h2><h3>Controls</h3><ul><li><b>WASD or Arrow keys:</b> steer in four directions.</li><li><b>Swipe:</b> swipe on the screen to steer on mobile.</li><li><b>Space, tap, or the opposite direction:</b> stop your snake. From a stop, turn in any direction except directly back onto your trail.</li></ul>
 <h3>Claim territory</h3><p>Leave your coloured territory, draw a loop, and return to your own land to claim the enclosed area. Your exposed trail is vulnerable—cross an opponent's trail to cut them, but avoid trails yourself.</p>
@@ -288,9 +288,11 @@ function closeSettings(){$('settings').style.display='none';}
 
 loadSettings();
 
-let W,H,DPR,own=new Int8Array(N*N),trl=new Int8Array(N*N),P={},towers=[],pu=[],popups=[],me=0,ws=null,time=0,camx=N*T/2,camy=N*T/2,frame=0,best=0,hudT=0;
+let W,H,DPR,own=new Int8Array(N*N),trl=new Int8Array(N*N),P={},towers=[],pu=[],popups=[],me=0,ws=null,time=0,camx=N*T/2,camy=N*T/2,frame=0,best=0,bestK=0,hudT=0;
 try{best=+localStorage.getItem('tilerush_best')||0;}catch(e){}
 $('bst').textContent=best.toFixed(1)+'%';
+try{bestK=+localStorage.getItem('tilerush_best_kills')||0;}catch(e){}
+$('bstk').textContent=bestK;
 
 const mm=document.createElement('canvas');mm.width=mm.height=N;const mg=mm.getContext('2d');
 
@@ -520,6 +522,7 @@ function draw(dt){
   hudT+=dt;
   if(hudT>.4&&mp){
     hudT=0;const a=mp.r/10;$('pct').textContent=a.toFixed(1)+'%';$('kl').textContent=mp.k;
+    if(mp.k>bestK){bestK=mp.k;$('bstk').textContent=bestK;try{localStorage.setItem('tilerush_best_kills',bestK);}catch(e){}}
     if(a>best){best=a;$('bst').textContent=a.toFixed(1)+'%';try{localStorage.setItem('tilerush_best',best);}catch(e){}}
     $('lb').innerHTML=Object.values(P).filter(p=>p.a).sort((a,b)=>b.r-a.r).slice(0,6).map(p=>'<div class="'+(p.id===me?'me':'')+'"><span style="color:'+p.c+'">■</span> '+p.n+'<span>'+(p.r/10).toFixed(1)+'%</span></div>').join('');
   }
