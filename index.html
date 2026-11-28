@@ -206,42 +206,17 @@ function setTailBrokenSound(on){
 }
 
 function fadeOutMenuMusic(){
-  if(musicStopRequested)return;
   musicStopRequested=true;
   document.removeEventListener('click',startMusic);
   document.removeEventListener('keydown',startMusic);
   document.removeEventListener('touchstart',startMusic);
-
   if(musicAnimationFrame!==null){
     cancelAnimationFrame(musicAnimationFrame);
     musicAnimationFrame=null;
   }
-
-  if(introMusic.paused){
-    introMusic.pause();
-    introMusic.currentTime=0;
-    introMusic.volume=0;
-    return;
-  }
-
-  const startingVolume=introMusic.volume;
-  const startTime=performance.now();
-  const fadeDuration=1000;
-
-  function fadeOut(now){
-    const progress=Math.min(1,(now-startTime)/fadeDuration);
-    introMusic.volume=startingVolume*(1-progress);
-    if(progress<1){
-      musicAnimationFrame=requestAnimationFrame(fadeOut);
-    }else{
-      musicAnimationFrame=null;
-      introMusic.pause();
-      introMusic.currentTime=0;
-      introMusic.volume=0;
-    }
-  }
-
-  musicAnimationFrame=requestAnimationFrame(fadeOut);
+  introMusic.pause();
+  introMusic.currentTime=0;
+  introMusic.volume=0;
 }
 
 function loadSettings(){
