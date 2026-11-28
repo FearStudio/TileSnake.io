@@ -78,9 +78,9 @@ button:disabled{opacity:.55;cursor:wait}
 <div class="setting">
 <div class="settingRow">
 <label for="musicVolume">Music Volume</label>
-<span class="settingValue" id="musicVolumeValue">65%</span>
+<span class="settingValue" id="musicVolumeValue">16%</span>
 </div>
-<input id="musicVolume" type="range" min="16" max="100" step="1" value="16">
+<input id="musicVolume" type="range" min="0" max="100" step="1" value="16">
 </div>
 
 <div class="setting">
@@ -147,6 +147,87 @@ const $=id=>document.getElementById(id);
 
 // SETTINGS
 const settings={uiSize:100,miniMapSize:100,musicVolume:16};
+let musicFadeProgress=0;
+let musicStarted=false;
+let musicStopRequested=false;
+let musicAnimationFrame=null;
+const introMusic=$('introMusic');
+introMusic.loop=true;
+introMusic.volume=0;
+
+function startMusic(){
+  if(musicStarted || musicStopRequested || settings.musicVolume===0)return;
+
+  introMusic.play().then(()=>{
+    if(musicStopRequested){
+      introMusic.pause();
+      introMusic.currentTime=0;
+      return;
+    }
+
+    musicStarted=true;
+    const startTime=performance.now();
+    const fadeDuration=2000;
+
+    function fadeIn(now){
+      if(musicStopRequested)return;
+      musicFadeProgress=Math.min(1,(now-startTime)/fadeDuration);
+      introMusic.volume=(settings.musicVolume/100)*musicFadeProgress;
+      if(musicFadeProgress<1){
+        musicAnimationFrame=requestAnimationFrame(fadeIn);
+      }else{
+        musicAnimationFrame=null;
+      }
+    }
+
+    musicAnimationFrame=requestAnimationFrame(fadeIn);
+    document.removeEventListener('click',startMusic);
+    document.removeEventListener('keydown',startMusic);
+    document.removeEventListener('touchstart',startMusic);
+    console.log('[Music] Playing with fade-in');
+  }).catch(e=>{
+    if(!musicStopRequested)console.log('[Music] Waiting for interaction:',e);
+  });
+}
+
+function fadeOutMenuMusic(){
+  if(musicStopRequested)return;
+  musicStopRequested=true;
+  document.removeEventListener('click',startMusic);
+  document.removeEventListener('keydown',startMusic);
+  document.removeEventListener('touchstart',startMusic);
+
+  if(musicAnimationFrame!==null){
+    cancelAnimationFrame(musicAnimationFrame);
+    musicAnimationFrame=null;
+  }
+
+  if(introMusic.paused){
+    introMusic.pause();
+    introMusic.currentTime=0;
+    introMusic.volume=0;
+    return;
+  }
+
+  const startingVolume=introMusic.volume;
+  const startTime=performance.now();
+  const fadeDuration=1000;
+
+  function fadeOut(now){
+    const progress=Math.min(1,(now-startTime)/fadeDuration);
+    introMusic.volume=startingVolume*(1-progress);
+    if(progress<1){
+      musicAnimationFrame=requestAnimationFrame(fadeOut);
+    }else{
+      musicAnimationFrame=null;
+      introMusic.pause();
+      introMusic.currentTime=0;
+      introMusic.volume=0;
+    }
+  }
+
+  musicAnimationFrame=requestAnimationFrame(fadeOut);
+}
 
 function loadSettings(){
   try{
@@ -154,8 +235,10 @@ function loadSettings(){
   }catch(e){}
   settings.uiSize=Math.min(140,Math.max(75,Number(settings.uiSize)||100));
   settings.miniMapSize=Math.min(140,Math.max(70,Number(settings.miniMapSize)||100));
-  settings.musicVolume=Math.min(100,Math.max(0,Number(settings.musicVolume)));
-  if(!Number.isFinite(settings.musicVolume))settings.musicVolume=65;
+  const savedMusicVolume=Number(settings.musicVolume);
+  settings.musicVolume=Number.isFinite(savedMusicVolume)
+    ? Math.min(100,Math.max(0,savedMusicVolume))
+    : 16;
 }
 
 function saveSettings(){
@@ -174,8 +257,7 @@ function applySettings(){
   $('musicVolumeValue').textContent=settings.musicVolume+'%';
   $('musicVolume').value=settings.musicVolume;
 
-  const music=$('introMusic');
-  music.volume=settings.musicVolume/100;
+  introMusic.volume=(settings.musicVolume/100)*musicFadeProgress;
 }
 
 function openSettings(){$('settings').style.display='flex';applySettings();}
@@ -206,6 +288,7 @@ let autoTries=0,reconnecting=false,retriedFull=false,kicked=false;
 
 function play(){
   if(joining)return;
+  fadeOutMenuMusic();
   const name=$('nm').value.trim()||'Player';
   const go=()=>{
     const code=room||inviteRoom;
@@ -314,14 +397,18 @@ $('miniMapSize').oninput=e=>{settings.miniMapSize=+e.target.value;saveSettings()
 
 $('musicVolume').oninput=e=>{
   settings.musicVolume=+e.target.value;
-  $('introMusic').volume=settings.musicVolume/100;
+  introMusic.volume=(settings.musicVolume/100)*musicFadeProgress;
   saveSettings();
   applySettings();
 };
 
 applySettings();
 
-$('go').onclick=()=>{if($('go').textContent==='PLAY AGAIN'&&ws)showAd(play);else play();};
+$('go').onclick=()=>{
+  fadeOutMenuMusic();
+  if($('go').textContent==='PLAY AGAIN'&&ws)showAd(play);
+  else play();
+};
 
 $('homeInvite').onclick=async()=>{
   const btn=$('homeInvite');
@@ -419,51 +506,9 @@ function loop(n){requestAnimationFrame(loop);const dt=Math.min(.05,(n-last)/1000
  
   requestAnimationFrame(loop);
 
-  const introMusic=$('introMusic');
-  introMusic.loop=true;
-
-  const targetVolume=settings.musicVolume/100;
-  introMusic.volume=0;
-
-  let musicStarted=false;
-
-  async function startMusic(){
-    if(musicStarted || settings.musicVolume===0)return;
-
-    try{
-      introMusic.volume=0;
-      await introMusic.play();
-      musicStarted=true;
-
-      // Smooth 2-second fade-in
-      const startTime=performance.now();
-      const fadeDuration=2000;
-
-      function fadeIn(now){
-        const progress=Math.min(1,(now-startTime)/fadeDuration);
-        introMusic.volume=targetVolume*progress;
-
-        if(progress<1){
-          requestAnimationFrame(fadeIn);
-        }
-      }
-
-      requestAnimationFrame(fadeIn);
-
-      document.removeEventListener('click',startMusic);
-      document.removeEventListener('keydown',startMusic);
-      document.removeEventListener('touchstart',startMusic);
-
-      console.log('[Music] Playing with fade-in');
-    }catch(e){
-      console.log('[Music] Waiting for interaction:',e);
-    }
-  }
-
-  // Try immediately when the loading screen appears
+  // Try immediately when the loading screen appears.
+  // If autoplay is blocked, start on the first user interaction.
   startMusic();
-
-  // If autoplay is blocked, start on first interaction
   document.addEventListener('click',startMusic);
   document.addEventListener('keydown',startMusic);
   document.addEventListener('touchstart',startMusic,{passive:true});
