@@ -416,25 +416,54 @@ let last=performance.now();
 function loop(n){requestAnimationFrame(loop);const dt=Math.min(.05,(n-last)/1000);last=n;try{draw(dt);}catch(e){console.error('[Render] draw error:',e);}}
 
 (async()=>{
+ 
+(async()=>{
   requestAnimationFrame(loop);
+
   const introMusic=$('introMusic');
+  introMusic.loop=true;
+  introMusic.volume=settings.musicVolume/100;
+
   let musicStarted=false;
 
-  try{
-    introMusic.loop=true;
-    introMusic.volume=settings.musicVolume/100;
-    introMusic.currentTime=0;
-    await introMusic.play();
-    musicStarted=true;
-  }catch(e){
-    console.log('[Music] Autoplay blocked:',e);
+  async function startMusic(){
+    if(musicStarted || settings.musicVolume<=0)return;
+
+    try{
+      await introMusic.play();
+      musicStarted=true;
+      console.log('[Music] Playing');
+
+      document.removeEventListener('click',startMusic);
+      document.removeEventListener('keydown',startMusic);
+      document.removeEventListener('touchstart',startMusic);
+      $('musicVolume').removeEventListener('input',startMusic);
+    }catch(e){
+      console.log('[Music] Playback waiting for interaction:',e);
+    }
   }
+
+  document.addEventListener('click',startMusic);
+  document.addEventListener('keydown',startMusic);
+  document.addEventListener('touchstart',startMusic,{passive:true});
+  $('musicVolume').addEventListener('input',startMusic);
+
+  startMusic();
 
   try{
     if(CG){
-      await Promise.race([CG.init(),new Promise((_,rej)=>setTimeout(()=>rej(new Error('SDK init timeout')),4000))]);
+      await Promise.race([
+        CG.init(),
+        new Promise((_,rej)=>
+          setTimeout(()=>rej(new Error('SDK init timeout')),4000)
+        )
+      ]);
+
       if(CG.game.loadingStart)CG.game.loadingStart();
-      const sdkRoom=CG.game.getInviteParam?CG.game.getInviteParam('roomId'):null;
+
+      const sdkRoom=CG.game.getInviteParam?
+        CG.game.getInviteParam('roomId'):null;
+
       inviteRoom=sdkRoom||QS.get('roomId')||QS.get('room')||'';
       registerCrazyGamesJoinListener();
     }
@@ -443,14 +472,20 @@ function loop(n){requestAnimationFrame(loop);const dt=Math.min(.05,(n-last)/1000
     inviteRoom=QS.get('roomId')||QS.get('room')||'';
   }
 
-  try{if(CG&&CG.game&&CG.game.loadingStop)CG.game.loadingStop();}catch(e){}
+  try{
+    if(CG&&CG.game&&CG.game.loadingStop)
+      CG.game.loadingStop();
+  }catch(e){}
 
   await new Promise(resolve=>setTimeout(resolve,10000));
 
   $('loadingScreen').style.opacity='0';
   setTimeout(()=>$('loadingScreen').style.display='none',450);
 
-  if(inviteRoom||(CG&&CG.game&&CG.game.isInstantMultiplayer))play();
+  if(inviteRoom||(CG&&CG.game&&CG.game.isInstantMultiplayer))
+    play();
+})();
+
 })();
 </script>
 </body>
