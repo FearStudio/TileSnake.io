@@ -167,8 +167,7 @@ function startMusic(){
 
   introMusic.play().then(()=>{
     if(musicStopRequested){
-      introMusic.pause();
-      introMusic.currentTime=0;
+      killMenuMusic();
       return;
     }
 
@@ -222,10 +221,22 @@ function fadeOutMenuMusic(){
     cancelAnimationFrame(musicAnimationFrame);
     musicAnimationFrame=null;
   }
-  introMusic.pause();
-  introMusic.currentTime=0;
-  introMusic.volume=0;
+  killMenuMusic();
 }
+
+function killMenuMusic(){
+  try{
+    introMusic.muted=true;
+    introMusic.volume=0;
+    introMusic.pause();
+    introMusic.currentTime=0;
+    introMusic.removeAttribute('src');
+    while(introMusic.firstChild)introMusic.removeChild(introMusic.firstChild);
+    introMusic.load();
+  }catch(e){}
+}
+
+introMusic.addEventListener('play',()=>{if(musicStopRequested)killMenuMusic();});
 
 function loadSettings(){
   try{
