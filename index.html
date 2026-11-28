@@ -192,6 +192,8 @@ function startMusic(){
     document.removeEventListener('click',startMusic);
     document.removeEventListener('keydown',startMusic);
     document.removeEventListener('touchstart',startMusic);
+  document.removeEventListener('mousedown',startMusic);
+  document.removeEventListener('pointerdown',startMusic);
     console.log('[Music] Playing with fade-in');
   }).catch(e=>{
     if(!musicStopRequested)console.log('[Music] Waiting for interaction:',e);
@@ -219,6 +221,8 @@ function fadeOutMenuMusic(){
   document.removeEventListener('click',startMusic);
   document.removeEventListener('keydown',startMusic);
   document.removeEventListener('touchstart',startMusic);
+  document.removeEventListener('mousedown',startMusic);
+  document.removeEventListener('pointerdown',startMusic);
   if(musicAnimationFrame!==null){
     cancelAnimationFrame(musicAnimationFrame);
     musicAnimationFrame=null;
@@ -531,6 +535,8 @@ function loop(n){requestAnimationFrame(loop);const dt=Math.min(.05,(n-last)/1000
   // Try immediately when the loading screen appears.
   // If autoplay is blocked, start on the first user interaction.
   setTimeout(()=>{musicAllowed=true;startMusic();},2000);
+  document.addEventListener('pointerdown',startMusic);
+  document.addEventListener('mousedown',startMusic);
   document.addEventListener('click',startMusic);
   document.addEventListener('keydown',startMusic);
   document.addEventListener('touchstart',startMusic,{passive:true});
