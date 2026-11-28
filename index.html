@@ -43,11 +43,21 @@ button:disabled{opacity:.55;cursor:wait}
 #settingsCard,#settings,#menu,#card,#settingsTab{transform:none!important;}
 #settings{z-index:30;}
 #menu{z-index:10}
-#loadingScreen{position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at center,#101a35,#05060c 70%);transition:opacity .4s}
-#loadingCard{text-align:center;width:min(340px,calc(100% - 48px));padding:28px;border:1px solid rgba(0,240,255,.4);border-radius:18px;background:rgba(10,14,30,.85);box-shadow:0 0 35px rgba(0,240,255,.18)}
-#loadingTitle{font-size:30px;font-weight:900;letter-spacing:3px;background:linear-gradient(90deg,var(--acc),var(--acc2));-webkit-background-clip:text;background-clip:text;color:transparent}
+#loadingScreen{position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at center,#101a35,#05060c 70%);transition:opacity .6s}
+#flipScene{perspective:1400px;width:min(404px,100vw);height:400px;transition:transform .6s ease}
+#flipInner{position:relative;width:100%;height:100%;transform-style:preserve-3d;transition:transform .9s cubic-bezier(.45,.05,.2,1)}
+#flipInner.flipped{transform:rotateY(180deg)}
+.face{position:absolute;inset:0;box-sizing:border-box;backface-visibility:hidden;-webkit-backface-visibility:hidden;display:flex;flex-direction:column;justify-content:center;text-align:center;padding:28px 32px;border:1px solid var(--acc);border-radius:18px;background:var(--panel);box-shadow:0 0 40px rgba(0,240,255,.25)}
+.face.back{transform:rotateY(180deg)}
+#startBtn{margin-top:10px}
+#loadingScreen.leaving{opacity:0}
+#loadingScreen.leaving #flipScene{transform:scale(1.07)}
+#card.enter{animation:cardIn .7s ease both}
+@keyframes cardIn{from{opacity:0}to{opacity:1}}
+#loadingTitle,.lt{font-size:38px;font-weight:900;letter-spacing:3px;line-height:1.2;background:linear-gradient(90deg,var(--acc),var(--acc2));-webkit-background-clip:text;background-clip:text;color:transparent}
 #loadingBar{height:8px;background:#141a2d;border-radius:20px;overflow:hidden;margin:22px 0 10px;border:1px solid rgba(0,240,255,.25)}
-#loadingFill{height:100%;width:0%;background:linear-gradient(90deg,var(--acc),var(--acc2));border-radius:20px;animation:loadFill 10s linear forwards}
+#loadingFill{height:100%;width:0%;background:linear-gradient(90deg,var(--acc),var(--acc2));border-radius:20px}
+#flipInner.flipped #loadingFill{animation:loadFill 10s linear .9s forwards}
 @keyframes loadFill{from{width:0%}to{width:100%}}
 #shopBtn{background:rgba(120,130,150,.12);color:#9ba8bd;border:1px solid rgba(150,160,180,.25);margin-top:9px;cursor:not-allowed;letter-spacing:1px}
 #shopBtn:disabled{opacity:.75}
@@ -63,7 +73,7 @@ button:disabled{opacity:.55;cursor:wait}
 </head>
 <body>
 <canvas id="c"></canvas>
-<div id="loadingScreen"><div id="loadingCard"><div id="loadingTitle">TILE SNAKE</div><div class="sub">BY FEAR STUDIO</div><div id="loadingBar"><div id="loadingFill"></div></div><div id="loadingText">LOADING GAME...</div></div></div>
+<div id="loadingScreen"><div id="flipScene"><div id="flipInner"><div class="face front"><div class="lt">TILE SNAKE</div><div class="sub">BY FEAR STUDIO</div><button id="startBtn">CLICK TO START</button></div><div class="face back"><div id="loadingTitle">TILE SNAKE</div><div class="sub">BY FEAR STUDIO</div><div id="loadingBar"><div id="loadingFill"></div></div><div id="loadingText">LOADING GAME...</div></div></div></div></div>
 <audio id="introMusic" preload="auto"><source src="loadingtomenusong.mp3" type="audio/mpeg"></audio><audio id="tailBrokenSound" preload="auto" loop><source src="idoberg-edm-melody-loop-02-270226.mp3" type="audio/mpeg"></audio>
 <div class="hud" id="st">Territory <b id="pct">0%</b> · Best <span id="bst">0%</span><br>Kills <span id="kl">0</span> · Best <span id="bstk">0</span></div>
 <div class="hud" id="lb"></div>
@@ -174,6 +184,7 @@ function startMusic(){
     }
 
     musicStarted=true;
+    {const lt=$('loadingText');if(lt)lt.textContent='LOADING GAME...';}
     const startTime=performance.now();
     const fadeDuration=2000;
 
@@ -196,7 +207,11 @@ function startMusic(){
   document.removeEventListener('pointerdown',startMusic);
     console.log('[Music] Playing with fade-in');
   }).catch(e=>{
-    if(!musicStopRequested)console.log('[Music] Waiting for interaction:',e);
+    if(!musicStopRequested){
+      console.log('[Music] Waiting for interaction:',e);
+      const lt=$('loadingText');
+      if(lt)lt.textContent='CLICK ANYWHERE FOR MUSIC';
+    }
   });
 }
 
@@ -537,7 +552,10 @@ function loop(n){requestAnimationFrame(loop);const dt=Math.min(.05,(n-last)/1000
 
   // Try immediately when the loading screen appears.
   // If autoplay is blocked, start on the first user interaction.
-  setTimeout(()=>{musicAllowed=true;startMusic();},2000);
+  const sizeFlip=()=>{const h=$('card').offsetHeight;if(h>100)$('flipScene').style.height=h+'px';};
+  sizeFlip();
+  window.addEventListener('resize',sizeFlip);
+  $('startBtn').focus();
   document.addEventListener('pointerdown',startMusic);
   document.addEventListener('mousedown',startMusic);
   document.addEventListener('click',startMusic);
@@ -571,10 +589,19 @@ function loop(n){requestAnimationFrame(loop);const dt=Math.min(.05,(n-last)/1000
       CG.game.loadingStop();
   }catch(e){}
 
-  await new Promise(resolve=>setTimeout(resolve,10000));
+  sizeFlip();
+  await new Promise(resolve=>$('startBtn').addEventListener('click',resolve,{once:true}));
+  window.removeEventListener('resize',sizeFlip);
 
-  $('loadingScreen').style.opacity='0';
-  setTimeout(()=>$('loadingScreen').style.display='none',450);
+  $('flipInner').classList.add('flipped');
+  // music starts when the bar reaches 20% (0.9s flip + 2s)
+  setTimeout(()=>{musicAllowed=true;startMusic();},2900);
+
+  await new Promise(resolve=>setTimeout(resolve,900+10000));
+
+  $('card').classList.add('enter');
+  $('loadingScreen').classList.add('leaving');
+  setTimeout(()=>$('loadingScreen').style.display='none',650);
 
   if(inviteRoom||(CG&&CG.game&&CG.game.isInstantMultiplayer))
     play();
